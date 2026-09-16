@@ -19,6 +19,55 @@ ScreenGui.Name = "TSB_MasterGUI"
 ScreenGui.Parent = CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+---------------------------------------------------------
+-- NÚT TRÒN BẬT/TẮT GUI & NÚT XÓA BÓNG BÓNG (MESSENGER STYLE)
+---------------------------------------------------------
+local ToggleGUIBtn = Instance.new("TextButton")
+ToggleGUIBtn.Name = "ToggleGUIBtn"
+ToggleGUIBtn.Size = UDim2.new(0, 50, 0, 50)
+ToggleGUIBtn.Position = UDim2.new(0, 15, 0.4, 0)
+ToggleGUIBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ToggleGUIBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleGUIBtn.Text = "TSB"
+ToggleGUIBtn.TextSize = 14
+ToggleGUIBtn.Font = Enum.Font.SourceSansBold
+ToggleGUIBtn.Parent = ScreenGui
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(1, 0)
+ToggleCorner.Parent = ToggleGUIBtn
+
+local ToggleStroke = Instance.new("UIStroke")
+ToggleStroke.Color = Color3.fromRGB(0, 170, 255)
+ToggleStroke.Thickness = 2
+ToggleStroke.Parent = ToggleGUIBtn
+
+-- Nút dấu X xóa bóng bóng ở dưới màn hình
+local DeleteZone = Instance.new("Frame")
+DeleteZone.Name = "DeleteZone"
+DeleteZone.Size = UDim2.new(0, 60, 0, 60)
+DeleteZone.Position = UDim2.new(0.5, -30, 0.85, 0)
+DeleteZone.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+DeleteZone.BackgroundTransparency = 0.2
+DeleteZone.Visible = false
+DeleteZone.Parent = ScreenGui
+
+local DeleteCorner = Instance.new("UICorner")
+DeleteCorner.CornerRadius = UDim.new(1, 0)
+DeleteCorner.Parent = DeleteZone
+
+local DeleteText = Instance.new("TextLabel")
+DeleteText.Size = UDim2.new(1, 0, 1, 0)
+DeleteText.BackgroundTransparency = 1
+DeleteText.Text = "X"
+DeleteText.TextColor3 = Color3.fromRGB(255, 255, 255)
+DeleteText.TextSize = 24
+DeleteText.Font = Enum.Font.SourceSansBold
+DeleteText.Parent = DeleteZone
+
+---------------------------------------------------------
+-- MAIN FRAME
+---------------------------------------------------------
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 380, 0, 540)
 MainFrame.Position = UDim2.new(0.5, -190, 0.5, -270)
@@ -42,27 +91,16 @@ TitleBar.Font = Enum.Font.SourceSansBold
 TitleBar.Parent = MainFrame
 local TitleCorner = Instance.new("UICorner") TitleCorner.CornerRadius = UDim.new(0, 12) TitleCorner.Parent = TitleBar
 
+-- Chỉ giữ lại nút thu nhỏ "-" (Đã Xóa hoàn toàn nút X)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
-MinimizeBtn.Position = UDim2.new(1, -70, 0, 5)
+MinimizeBtn.Position = UDim2.new(1, -35, 0, 5)
 MinimizeBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.Text = "-"
 MinimizeBtn.TextSize = 18
 MinimizeBtn.Parent = TitleBar
 local MinCorner = Instance.new("UICorner") MinCorner.CornerRadius = UDim.new(0, 6) MinCorner.Parent = MinimizeBtn
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.Text = "X"
-CloseBtn.TextSize = 14
-CloseBtn.Parent = TitleBar
-local CloseCorner = Instance.new("UICorner") CloseCorner.CornerRadius = UDim.new(0, 6) CloseCorner.Parent = CloseBtn
-
-CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
 local minimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
@@ -75,25 +113,137 @@ MinimizeBtn.MouseButton1Click:Connect(function()
     MainFrame.Size = minimized and UDim2.new(0, 380, 0, 40) or UDim2.new(0, 380, 0, 540)
 end)
 
-local dragging, dragStart, startPos
+-- Xử lý Dragging cho MainFrame
+local draggingFrame, dragStartFrame, startPosFrame
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
+        draggingFrame = true
+        dragStartFrame = input.Position
+        startPosFrame = MainFrame.Position
         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            if input.UserInputState == Enum.UserInputState.End then draggingFrame = false end
         end)
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and draggingFrame then
+        local delta = input.Position - dragStartFrame
+        MainFrame.Position = UDim2.new(startPosFrame.X.Scale, startPosFrame.X.Offset + delta.X, startPosFrame.Y.Scale, startPosFrame.Y.Offset + delta.Y)
     end
 end)
 
+-- Kéo thả nút Tròn Toggle & Cơ chế Xóa Messenger
+local draggingBtn, dragStartBtn, startPosBtn
+local isDraggingBtn = false
+
+ToggleGUIBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingBtn = true
+        isDraggingBtn = false
+        dragStartBtn = input.Position
+        startPosBtn = ToggleGUIBtn.Position
+        DeleteZone.Visible = true
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then 
+                if draggingBtn then
+                    draggingBtn = false
+                    DeleteZone.Visible = false
+                    
+                    -- Kiểm tra xem nút tròn có được thả vào ô DeleteZone không
+                    local btnCenter = ToggleGUIBtn.AbsolutePosition + (ToggleGUIBtn.AbsoluteSize / 2)
+                    local delCenter = DeleteZone.AbsolutePosition + (DeleteZone.AbsoluteSize / 2)
+                    local dist = (btnCenter - delCenter).Magnitude
+                    
+                    if dist < 60 then
+                        ScreenGui:Destroy() -- Xóa hoàn toàn GUI
+                    else
+                        if not isDraggingBtn then
+                            MainFrame.Visible = not MainFrame.Visible
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and draggingBtn then
+        local delta = input.Position - dragStartBtn
+        if delta.Magnitude > 5 then
+            isDraggingBtn = true
+        end
+        ToggleGUIBtn.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+        
+        -- Hiệu ứng phóng to nút X khi di chuyển nút tròn lại gần
+        local btnCenter = ToggleGUIBtn.AbsolutePosition + (ToggleGUIBtn.AbsoluteSize / 2)
+        local delCenter = DeleteZone.AbsolutePosition + (DeleteZone.AbsoluteSize / 2)
+        local dist = (btnCenter - delCenter).Magnitude
+        if dist < 100 then
+            DeleteZone.Size = UDim2.new(0, 75, 0, 75)
+        else
+            DeleteZone.Size = UDim2.new(0, 60, 0, 60)
+        end
+    end
+end)
+
+---------------------------------------------------------
+-- TÂM TRÒN AUTO CLICK ĐẤM DI CHUYỂN TỰ DO (MOBILE / PC)
+---------------------------------------------------------
+local AutoPunchCircle = Instance.new("Frame")
+AutoPunchCircle.Name = "AutoPunchCircle"
+AutoPunchCircle.Size = UDim2.new(0, 50, 0, 50)
+-- Đặt mặc định theo tọa độ UI Backpack từ ảnh bạn gửi
+AutoPunchCircle.Position = UDim2.new(0.5, -25, 0.8, 0)
+AutoPunchCircle.BackgroundColor3 = Color3.fromRGB(255, 0, 80)
+AutoPunchCircle.BackgroundTransparency = 0.5
+AutoPunchCircle.Visible = false
+AutoPunchCircle.ZIndex = 10
+AutoPunchCircle.Parent = ScreenGui
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1, 0)
+CircleCorner.Parent = AutoPunchCircle
+
+local CircleStroke = Instance.new("UIStroke")
+CircleStroke.Color = Color3.fromRGB(255, 255, 255)
+CircleStroke.Thickness = 2
+CircleStroke.Parent = AutoPunchCircle
+
+local CircleText = Instance.new("TextLabel")
+CircleText.Size = UDim2.new(1, 0, 1, 0)
+CircleText.BackgroundTransparency = 1
+CircleText.Text = "PUNCH"
+CircleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+CircleText.TextSize = 10
+CircleText.Font = Enum.Font.SourceSansBold
+CircleText.Parent = AutoPunchCircle
+
+-- Kéo thả Tâm Tròn Auto Clicker
+local dragCircle, dragStartCircle, startPosCircle
+AutoPunchCircle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragCircle = true
+        dragStartCircle = input.Position
+        startPosCircle = AutoPunchCircle.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragCircle = false end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragCircle then
+        local delta = input.Position - dragStartCircle
+        AutoPunchCircle.Position = UDim2.new(startPosCircle.X.Scale, startPosCircle.X.Offset + delta.X, startPosCircle.Y.Scale, startPosCircle.Y.Offset + delta.Y)
+    end
+end)
+
+---------------------------------------------------------
+-- CONTAINER CHÍNH
+---------------------------------------------------------
 local ContentContainer = Instance.new("ScrollingFrame")
 ContentContainer.Size = UDim2.new(1, -20, 1, -60)
 ContentContainer.Position = UDim2.new(0, 10, 0, 50)
@@ -267,7 +417,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 ---------------------------------------------------------
--- 2. GHIM ĐÁNH (KHÓA MỤC TIÊU & TUNG CHIÊU) VÀ AUTO ĐẤM TỰ DO
+-- 2. GHIM ĐÁNH (KHÓA MỤC TIÊU, TUNG CHIÊU & BẬT NỘ CỨ 5s)
 ---------------------------------------------------------
 createPlayerDropdown("Chọn 1 mục tiêu Ghim & Đánh (Sáng Xanh):", false, function(name)
     selectedAttackTarget = name
@@ -277,7 +427,7 @@ local AttackToggleBtn = Instance.new("TextButton")
 AttackToggleBtn.Size = UDim2.new(1, 0, 0, 32)
 AttackToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 180)
 AttackToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AttackToggleBtn.Text = "Bật Ghim Vị Trí & Tự Tung Chiêu (Hỗ Trợ PC & Điện Thoại)"
+AttackToggleBtn.Text = "Bật Ghim Vị Trí, Tung Chiêu & Auto Nộ (Mỗi 5s)"
 AttackToggleBtn.TextSize = 13
 AttackToggleBtn.Font = Enum.Font.SourceSansBold
 AttackToggleBtn.Parent = ContentContainer
@@ -301,27 +451,52 @@ RunService.Heartbeat:Connect(function()
     hrp.CFrame = predictedCFrame * CFrame.new(0, 0, 3.5)
 end)
 
--- CODE GỐC TUNG CHIÊU TỪ FILE CHO PC KÈM HỖ TRỢ ĐIỆN THOẠI
+-- CODE TUNG CHIÊU + BẬT NỘ CỨ 5 GIÂY (KEY G / ULTIMATE)
 task.spawn(function()
     local skills = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
     local skillIndex = 1
+    local lastGTime = tick()
+
     while true do
         if attackActive and selectedAttackTarget then
             pcall(function()
-                -- MẶC ĐỊNH LUÔN CHẠY GỐC CHO PC (ĐẢM BẢO KHÔNG LỖI)
+                -- 1. Tự động nhấn phím G (Bật Nộ TSB) cứ mỗi 5 giây
+                if tick() - lastGTime >= 5 then
+                    lastGTime = tick()
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
+                    task.wait(0.05)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
+                    
+                    -- Hỗ trợ bấm nút Ultimate trên UI điện thoại
+                    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                    if playerGui then
+                        local screenUI = playerGui:FindFirstChild("ScreenGui") or playerGui:FindFirstChild("Hotbar")
+                        if screenUI then
+                            local ultBtn = screenUI:FindFirstChild("Ultimate") or screenUI:FindFirstChild("Awakening")
+                            if ultBtn and ultBtn.AbsolutePosition.X > 0 then
+                                local uX = ultBtn.AbsolutePosition.X + (ultBtn.AbsoluteSize.X / 2)
+                                local uY = ultBtn.AbsolutePosition.Y + (ultBtn.AbsoluteSize.Y / 2)
+                                VirtualInputManager:SendMouseButtonEvent(uX, uY, 0, true, game, 1)
+                                task.wait(0.05)
+                                VirtualInputManager:SendMouseButtonEvent(uX, uY, 0, false, game, 1)
+                            end
+                        end
+                    end
+                end
+
+                -- 2. Chạy Skill 1, 2, 3, 4 cho PC
                 local key = skills[skillIndex]
                 VirtualInputManager:SendKeyEvent(true, key, false, game)
                 task.wait(0.05)
                 VirtualInputManager:SendKeyEvent(false, key, false, game)
                 
-                -- KẾT HỢP SONG SONG: Nhấn vào vùng chiêu (PlayerGui.Hotbar.Backpack) cho điện thoại
+                -- Hỗ trợ nhấn vào vùng chiêu (PlayerGui.Hotbar.Backpack) cho điện thoại
                 local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
                 if playerGui then
                     local hotbar = playerGui:FindFirstChild("Hotbar")
                     if hotbar and hotbar:FindFirstChild("Backpack") then
                         local backpackUI = hotbar.Backpack
                         if backpackUI.AbsolutePosition.X > 0 then
-                            -- Chia Backpack thành 4 phần để nhấn đúng ô skill 1,2,3,4
                             local sectionWidth = backpackUI.AbsoluteSize.X / 4
                             local targetX = backpackUI.AbsolutePosition.X + (sectionWidth * (skillIndex - 1)) + (sectionWidth / 2)
                             local targetY = backpackUI.AbsolutePosition.Y + (backpackUI.AbsoluteSize.Y / 2)
@@ -341,12 +516,14 @@ task.spawn(function()
     end
 end)
 
--- NÚT AUTO ĐẤM TỰ DO (MỖI 0.5 GIÂY) KỂ CẢ KHI BẠN ĐANG ĐI BỘ
+---------------------------------------------------------
+-- NÚT AUTO ĐẤM TỰ DO & TÂM TRÒN AUTO CLICK
+---------------------------------------------------------
 local AutoPunchBtn = Instance.new("TextButton")
 AutoPunchBtn.Size = UDim2.new(1, 0, 0, 32)
 AutoPunchBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 150)
 AutoPunchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AutoPunchBtn.Text = "Bật Auto Đấm (0.5s/lần - PC & Nhấn Backpack Điện Thoại)"
+AutoPunchBtn.Text = "Bật Auto Đấm (Tâm Tròn Clicker Tự Do)"
 AutoPunchBtn.TextSize = 13
 AutoPunchBtn.Font = Enum.Font.SourceSansBold
 AutoPunchBtn.Parent = ContentContainer
@@ -355,36 +532,30 @@ local autoPunchActive = false
 AutoPunchBtn.MouseButton1Click:Connect(function()
     autoPunchActive = not autoPunchActive
     AutoPunchBtn.BackgroundColor3 = autoPunchActive and Color3.fromRGB(40, 180, 40) or Color3.fromRGB(150, 40, 150)
+    -- Bật/tắt hiển thị Tâm Tròn Auto Click
+    AutoPunchCircle.Visible = autoPunchActive
 end)
 
--- CODE GỐC AUTO ĐẤM TỪ FILE KÈM HỖ TRỢ ĐIỆN THOẠI
+-- VÒNG LẶP AUTO ĐẤM THEO TÂM TRÒN CLICKER
 task.spawn(function()
     while true do
         if autoPunchActive then
             pcall(function()
-                -- MẶC ĐỊNH LUÔN CHẠY GỐC CHO PC (Click giữa màn hình)
+                -- Mặc định click PC
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
                 task.wait(0.05)
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
 
-                -- KẾT HỢP SONG SONG: Nhấn trực tiếp vào Path nút từ ảnh cho điện thoại (PlayerGui.Hotbar.Backpack)
-                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                if playerGui then
-                    local hotbar = playerGui:FindFirstChild("Hotbar")
-                    if hotbar and hotbar:FindFirstChild("Backpack") then
-                        local backpackBtn = hotbar.Backpack
-                        if backpackBtn.AbsolutePosition.X > 0 then
-                            local posX = backpackBtn.AbsolutePosition.X + (backpackBtn.AbsoluteSize.X / 2)
-                            local posY = backpackBtn.AbsolutePosition.Y + (backpackBtn.AbsoluteSize.Y / 2)
-                            VirtualInputManager:SendMouseButtonEvent(posX, posY, 0, true, game, 1)
-                            task.wait(0.05)
-                            VirtualInputManager:SendMouseButtonEvent(posX, posY, 0, false, game, 1)
-                        end
-                    end
+                -- Click chính xác vào vị trí Tâm Tròn Auto Clicker đang đứng
+                if AutoPunchCircle.Visible then
+                    local circlePos = AutoPunchCircle.AbsolutePosition + (AutoPunchCircle.AbsoluteSize / 2)
+                    VirtualInputManager:SendMouseButtonEvent(circlePos.X, circlePos.Y, 0, true, game, 1)
+                    task.wait(0.05)
+                    VirtualInputManager:SendMouseButtonEvent(circlePos.X, circlePos.Y, 0, false, game, 1)
                 end
             end)
         end
-        task.wait(0.45) -- Tổng chu kì ~0.5 giây
+        task.wait(0.45) -- Chu kỳ đấm ~0.5 giây
     end
 end)
 
@@ -408,9 +579,7 @@ ExtremeBtn.MouseButton1Click:Connect(function()
     ExtremeBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
     ExtremeBtn.Text = "Đã Bật Anti-Lag Ban Ngày & Sàn Y100"
 
-    -- =======================================================
     -- 1. AUTOMATIC ANTI-AFK ENGINE
-    -- =======================================================
     task.spawn(function()
         local VirtualUser = game:GetService("VirtualUser")
         
@@ -429,9 +598,7 @@ ExtremeBtn.MouseButton1Click:Connect(function()
         end
     end)
 
-    -- =========================================================
     -- 2. CREATE SAFETY FLOOR (CỐ ĐỊNH Y = 100, DI CHUYỂN X, Z)
-    -- =========================================================
     local floorName = "TSB_SafetyFloor_Y100"
     local oldFloor = workspace:FindFirstChild(floorName)
     if oldFloor then oldFloor:Destroy() end
@@ -454,9 +621,7 @@ ExtremeBtn.MouseButton1Click:Connect(function()
         end
     end)
 
-    -- =========================================================
     -- 3. EXTREME ANTI-LAG (BAN NGÀY & HIỆN NGƯỜI CHƠI)
-    -- =========================================================
     local SoundService = game:GetService("SoundService")
     local StarterGui = game:GetService("StarterGui")
 
@@ -494,16 +659,11 @@ ExtremeBtn.MouseButton1Click:Connect(function()
     local function nukeEverything()
         pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
         
-        -- ÁNH SÁNG BAN NGÀY
         Lighting.Brightness = 2
         Lighting.ClockTime = 14
         Lighting.Ambient = Color3.fromRGB(150, 150, 150)
         Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
         Lighting.GlobalShadows = false
-        
-        for _, obj in ipairs(Lighting:GetChildren()) do 
-            if not obj:IsA("Atmosphere") and not obj:IsA("Sky") then end 
-        end
         
         for _, sound in ipairs(SoundService:GetDescendants()) do 
             if sound:IsA("Sound") and not isPlayerCharacter(sound) then 
