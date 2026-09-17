@@ -1,4 +1,4 @@
---// TSB Ultimate Script - PC & Mobile (Ultra Fixed & Physics Update)
+--// TSB Ultimate Script - PC & Mobile (Continuous Non-Stop Attack Loop)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -12,6 +12,12 @@ local LocalPlayer = Players.LocalPlayer
 if CoreGui:FindFirstChild("TSB_MasterGUI") then
     CoreGui.TSB_MasterGUI:Destroy()
 end
+if CoreGui:FindFirstChild("TSB_BubbleGUI") then
+    CoreGui.TSB_BubbleGUI:Destroy()
+end
+if CoreGui:FindFirstChild("TSB_DeleteZoneGUI") then
+    CoreGui.TSB_DeleteZoneGUI:Destroy()
+end
 
 -- Tạo ScreenGui chính
 local ScreenGui = Instance.new("ScreenGui")
@@ -21,7 +27,7 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 380, 0, 540)
-MainFrame.Position = UDim2.new(0.5, -190, 0.5, -270)
+MainFrame.Position = UDim2.new(0.5, -190, 0.45, -230)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BackgroundTransparency = 0.2
 MainFrame.BorderSizePixel = 0
@@ -62,7 +68,15 @@ CloseBtn.TextSize = 14
 CloseBtn.Parent = TitleBar
 local CloseCorner = Instance.new("UICorner") CloseCorner.CornerRadius = UDim.new(0, 6) CloseCorner.Parent = CloseBtn
 
-CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+CloseBtn.MouseButton1Click:Connect(function() 
+    ScreenGui:Destroy() 
+    if CoreGui:FindFirstChild("TSB_BubbleGUI") then
+        CoreGui.TSB_BubbleGUI:Destroy()
+    end
+    if CoreGui:FindFirstChild("TSB_DeleteZoneGUI") then
+        CoreGui.TSB_DeleteZoneGUI:Destroy()
+    end
+end)
 
 local minimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
@@ -91,6 +105,97 @@ UserInputService.InputChanged:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
         local delta = input.Position - dragStart
         MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+---------------------------------------------------------
+-- NÚT BONG BÓNG BÊN TRÁI MÀN HÌNH & KÉO THẢ VÀO X ĐỂ XÓA
+---------------------------------------------------------
+local DeleteZoneGui = Instance.new("ScreenGui")
+DeleteZoneGui.Name = "TSB_DeleteZoneGUI"
+DeleteZoneGui.Parent = CoreGui
+DeleteZoneGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local DeleteZone = Instance.new("Frame")
+DeleteZone.Size = UDim2.new(0, 60, 0, 60)
+DeleteZone.Position = UDim2.new(0.5, -30, 1, -80)
+DeleteZone.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+DeleteZone.BackgroundTransparency = 0.5
+DeleteZone.Visible = false
+DeleteZone.Parent = DeleteZoneGui
+
+local ZoneCorner = Instance.new("UICorner")
+ZoneCorner.CornerRadius = UDim.new(1, 0)
+ZoneCorner.Parent = DeleteZone
+
+local ZoneText = Instance.new("TextLabel")
+ZoneText.Size = UDim2.new(1, 0, 1, 0)
+ZoneText.BackgroundTransparency = 1
+ZoneText.Text = "X"
+ZoneText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ZoneText.TextSize = 24
+ZoneText.Font = Enum.Font.SourceSansBold
+ZoneText.Parent = DeleteZone
+
+local BubbleGui = Instance.new("ScreenGui")
+BubbleGui.Name = "TSB_BubbleGUI"
+BubbleGui.Parent = CoreGui
+BubbleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local BubbleBtn = Instance.new("TextButton")
+BubbleBtn.Size = UDim2.new(0, 50, 0, 50)
+BubbleBtn.Position = UDim2.new(0, 20, 0.4, 0)
+BubbleBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+BubbleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+BubbleBtn.Text = "TSB"
+BubbleBtn.TextSize = 14
+BubbleBtn.Font = Enum.Font.SourceSansBold
+BubbleBtn.Parent = BubbleGui
+
+local BubbleCorner = Instance.new("UICorner")
+BubbleCorner.CornerRadius = UDim.new(1, 0)
+BubbleCorner.Parent = BubbleBtn
+
+local bubbleDragging = false
+local bubbleDragStart = Vector2.new(0, 0)
+local bubbleStartPos = UDim2.new(0, 20, 0.4, 0)
+local hasMoved = false
+
+BubbleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        bubbleDragging = true
+        bubbleDragStart = input.Position
+        bubbleStartPos = BubbleBtn.Position
+        hasMoved = false
+        DeleteZone.Visible = true
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                bubbleDragging = false
+                DeleteZone.Visible = false
+                
+                local absPos = BubbleBtn.AbsolutePosition
+                local zonePos = DeleteZone.AbsolutePosition
+                local distance = (absPos - zonePos).Magnitude
+                if distance < 60 then
+                    ScreenGui:Destroy()
+                    BubbleGui:Destroy()
+                    DeleteZoneGui:Destroy()
+                elseif not hasMoved then
+                    ScreenGui.Enabled = not ScreenGui.Enabled
+                end
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and bubbleDragging then
+        local delta = input.Position - bubbleDragStart
+        if delta.Magnitude > 5 then
+            hasMoved = true
+        end
+        BubbleBtn.Position = UDim2.new(bubbleStartPos.X.Scale, bubbleStartPos.X.Offset + delta.X, bubbleStartPos.Y.Scale, bubbleStartPos.Y.Offset + delta.Y)
     end
 end)
 
@@ -173,7 +278,7 @@ local function createPlayerDropdown(titleText, isMultiSelect, callback)
 end
 
 ---------------------------------------------------------
--- 1. HỆ THỐNG FLING (DỰ ĐOÁN & RUNG LẮC THEO HƯỚNG ĐI)
+-- 1. HỆ THỐNG FLING (CÓ DỰ ĐOÁN HITBOX THEO TỐC ĐỘ DI CHUYỂN)
 ---------------------------------------------------------
 createPlayerDropdown("Chọn người chơi Fling (Chọn nhiều):", true, function(name)
     local idx = table.find(selectedFlingPlayers, name)
@@ -207,7 +312,7 @@ local function toggleFling(mode, btn)
     if flingMode == mode then
         flingMode = nil
         btn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
-        if mode == "ONCE" and startPosFling and char and char:FindFirstChild("HumanoidRootPart") then
+        if startPosFling and char and char:FindFirstChild("HumanoidRootPart") then
             char.HumanoidRootPart.CFrame = startPosFling
             startPosFling = nil
         end
@@ -215,7 +320,7 @@ local function toggleFling(mode, btn)
         flingMode = mode
         currentFlingIndex = 1
         btn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
-        if mode == "ONCE" and char and char:FindFirstChild("HumanoidRootPart") and not startPosFling then
+        if char and char:FindFirstChild("HumanoidRootPart") and not startPosFling then
             startPosFling = char.HumanoidRootPart.CFrame
         end
     end
@@ -233,7 +338,12 @@ RunService.Heartbeat:Connect(function()
 
     if currentFlingIndex > #selectedFlingPlayers then
         if flingMode == "ONCE" then
-            toggleFling("ONCE", FlingOnceBtn)
+            flingMode = nil
+            FlingOnceBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
+            if startPosFling then
+                hrp.CFrame = startPosFling
+                startPosFling = nil
+            end
             return
         else
             currentFlingIndex = 1
@@ -248,17 +358,18 @@ RunService.Heartbeat:Connect(function()
         local tVel = targetHRP.AssemblyLinearVelocity
         
         local moveDir = tVel.Magnitude > 2 and tVel.Unit or targetHRP.CFrame.LookVector
-        local predictedPos = targetHRP.Position + (tVel * 0.25)
+        local predictedPos = targetHRP.Position + (tVel * 0.2)
         
         flipJitter = not flipJitter
-        local jitterOffset = flipJitter and 3 or -3 
+        local jitterOffset = flipJitter and 2 or -2 
         
         hrp.CFrame = CFrame.new(predictedPos + (moveDir * jitterOffset))
         
-        hrp.AssemblyLinearVelocity = Vector3.new(90000, 90000, 90000)
-        hrp.AssemblyAngularVelocity = Vector3.new(90000, 90000, 90000)
+        hrp.AssemblyLinearVelocity = Vector3.new(12000, 4000, 12000)
+        hrp.AssemblyAngularVelocity = Vector3.new(15000, 15000, 15000)
         
-        if tVel.Magnitude > 200 or (targetHRP.Position - hrp.Position).Magnitude > 300 or (p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health <= 0) then
+        local distance = (targetHRP.Position - hrp.Position).Magnitude
+        if distance > 120 or (p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health <= 0) then
             currentFlingIndex = currentFlingIndex + 1
         end
     else
@@ -267,7 +378,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 ---------------------------------------------------------
--- 2. GHIM ĐÁNH (KHÓA MỤC TIÊU & TUNG CHIÊU) VÀ AUTO ĐẤM TỰ DO
+-- 2. GHIM ĐÁNH VÀ TÙNG CHIÊU (ĐỨNG SAU LƯNG 5 STUDS, DỰ ĐOÁN ĐÓN ĐẦU CHUYỂN ĐỘNG)
 ---------------------------------------------------------
 createPlayerDropdown("Chọn 1 mục tiêu Ghim & Đánh (Sáng Xanh):", false, function(name)
     selectedAttackTarget = name
@@ -277,7 +388,7 @@ local AttackToggleBtn = Instance.new("TextButton")
 AttackToggleBtn.Size = UDim2.new(1, 0, 0, 32)
 AttackToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 180)
 AttackToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AttackToggleBtn.Text = "Bật Ghim Vị Trí & Tự Tung Chiêu (Hỗ Trợ PC & Điện Thoại)"
+AttackToggleBtn.Text = "Bật Ghim Vị Trí & Tự Tung Chiêu (5 Studs - Có Dự Đoán Đón Đầu)"
 AttackToggleBtn.TextSize = 13
 AttackToggleBtn.Font = Enum.Font.SourceSansBold
 AttackToggleBtn.Parent = ContentContainer
@@ -297,160 +408,90 @@ RunService.Heartbeat:Connect(function()
     
     local hrp = char.HumanoidRootPart
     local targetHRP = p.Character.HumanoidRootPart
-    -- Sửa hàn cứng đứng thẳng lưng tuyệt đối, không độ trễ, cố định hướng mặt theo mục tiêu không bị xoay tròn
-    hrp.CFrame = CFrame.new(targetHRP.Position - (targetHRP.CFrame.LookVector * 2.5) + Vector3.new(0, 0, 0), targetHRP.Position)
+    local tVel = targetHRP.AssemblyLinearVelocity
+    
+    -- THUẬT TOÁN DỰ ĐOÁN ĐÓN ĐẦU: Mục tiêu di chuyển tới đâu, ta tự động nhích lên đón đầu hướng đó để bù độ trễ mạng
+    local predictedTargetPos = targetHRP.Position + (tVel * 0.15)
+    hrp.CFrame = CFrame.new(predictedTargetPos - (targetHRP.CFrame.LookVector * 5), targetHRP.Position)
     hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end)
 
--- CODE GỐC TUNG CHIÊU TỪ FILE CHO PC KÈM HỖ TRỢ ĐIỆN THOẠI
+-- LUỒNG RIÊNG 1: ĐÁNH THƯỜNG LIÊN TỤC KHÔNG NGẮT NHỊP (2 cái trong 0.6 giây, lặp lại vô tận)
 task.spawn(function()
-    local skills = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
-    local skillIndex = 1
     while true do
         if attackActive and selectedAttackTarget then
             pcall(function()
-                -- MẶC ĐỊNH LUÔN CHẠY GỐC CHO PC (ĐẢM BẢO KHÔNG LỖI)
-                local key = skills[skillIndex]
-                VirtualInputManager:SendKeyEvent(true, key, false, game)
-                task.wait(0.05)
-                VirtualInputManager:SendKeyEvent(false, key, false, game)
-                
-                -- KẾT HỢP SONG SONG: Nhấn vào vùng chiêu (PlayerGui.Hotbar.Backpack hoặc nút kỹ năng di động) cho điện thoại
-                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                if playerGui then
-                    local function clickTouchButton(btnObj)
-                        if btnObj and btnObj.AbsolutePosition.X > 0 and btnObj.AbsoluteSize.X > 0 then
-                            local targetX = btnObj.AbsolutePosition.X + (btnObj.AbsoluteSize.X / 2)
-                            local targetY = btnObj.AbsolutePosition.Y + (btnObj.AbsoluteSize.Y / 2)
-                            VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, true, game, 1)
-                            task.wait(0.02)
-                            VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, false, game, 1)
-                        end
-                    end
-
-                    local hotbar = playerGui:FindFirstChild("Hotbar")
-                    if hotbar then
-                        local backpackUI = hotbar:FindFirstChild("Backpack") or hotbar:FindFirstChild("MobileButtons") or hotbar:FindFirstChild("Skills")
-                        if backpackUI then
-                            local children = backpackUI:GetChildren()
-                            local validBtns = {}
-                            for _, child in ipairs(children) do
-                                if child:IsA("GuiButton") or child:IsA("Frame") or child:IsA("ImageButton") then
-                                    table.insert(validBtns, child)
-                                end
-                            end
-                            if #validBtns >= skillIndex then
-                                clickTouchButton(validBtns[skillIndex])
-                            elseif backpackUI.AbsolutePosition.X > 0 then
-                                local sectionWidth = backpackUI.AbsoluteSize.X / 4
-                                local targetX = backpackUI.AbsolutePosition.X + (sectionWidth * (skillIndex - 1)) + (sectionWidth / 2)
-                                local targetY = backpackUI.AbsolutePosition.Y + (backpackUI.AbsoluteSize.Y / 2)
-                                VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, true, game, 1)
-                                task.wait(0.02)
-                                VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, false, game, 1)
-                            end
-                        end
-                    end
+                for i = 1, 2 do
+                    if not attackActive or not selectedAttackTarget then break end
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                    task.wait(0.28)
                 end
             end)
-            skillIndex = skillIndex % #skills + 1
-            task.wait(1) 
         else
-            task.wait(0.5)
+            task.wait(0.1)
         end
+        task.wait()
     end
 end)
 
--- NÚT AUTO ĐẤM TỰ DO (ĐÁNH 2 CÁI TRONG 0.5 GIÂY) KỂ CẢ KHI BẠN ĐANG DI CHUYỂN
-local AutoPunchBtn = Instance.new("TextButton")
-AutoPunchBtn.Size = UDim2.new(1, 0, 0, 32)
-AutoPunchBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 150)
-AutoPunchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AutoPunchBtn.Text = "Bật Auto Đấm (2 cái / 0.5s - PC & Nhấn Backpack Điện Thoại)"
-AutoPunchBtn.TextSize = 13
-AutoPunchBtn.Font = Enum.Font.SourceSansBold
-AutoPunchBtn.Parent = ContentContainer
-
-local autoPunchActive = false
-AutoPunchBtn.MouseButton1Click:Connect(function()
-    autoPunchActive = not autoPunchActive
-    AutoPunchBtn.BackgroundColor3 = autoPunchActive and Color3.fromRGB(40, 180, 40) or Color3.fromRGB(150, 40, 150)
-end)
-
--- CODE GỐC AUTO ĐẤM TỪ FILE KÈM HỖ TRỢ ĐIỆN THOẠI (TỐC ĐỘ 2 CÁI TRONG 0.5 GIÂY)
+-- LUỒNG RIÊNG 2: TỰ ĐỘNG TUNG CHIÊU 1, 2, 3, 4 (Mỗi chiêu cách nhau đúng 1 giây)
 task.spawn(function()
+    local skills = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
     while true do
-        if autoPunchActive then
+        if attackActive and selectedAttackTarget then
             pcall(function()
-                -- Đánh đòn thứ nhất
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.02)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-
-                -- Hỗ trợ nút clone/backpack trên điện thoại cho đòn thứ nhất
-                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                if playerGui then
-                    local function triggerMobileButton(pathName)
-                        local targetElem = playerGui
-                        for _, v in ipairs(pathName) do
-                            if targetElem then targetElem = targetElem:FindFirstChild(v) end
-                        end
-                        if targetElem and targetElem.AbsolutePosition.X > 0 and targetElem.AbsoluteSize.X > 0 then
-                            local posX = targetElem.AbsolutePosition.X + (targetElem.AbsoluteSize.X / 2)
-                            local posY = targetElem.AbsolutePosition.Y + (targetElem.AbsoluteSize.Y / 2)
-                            VirtualInputManager:SendMouseButtonEvent(posX, posY, 0, true, game, 1)
-                            task.wait(0.02)
-                            VirtualInputManager:SendMouseButtonEvent(posX, posY, 0, false, game, 1)
-                        end
-                    end
-
-                    triggerMobileButton({"Hotbar", "Backpack"})
-                    triggerMobileButton({"MobileButtons", "Combat", "Punch"})
-                    triggerMobileButton({"TouchGui", "TouchControlFrame", "DynamicThumbstick"})
-                end
-
-                task.wait(0.15) -- Khoảng nghỉ nhỏ giữa 2 cú đấm
-
-                -- Đánh đòn thứ hai trong chu kỳ 0.5 giây
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.02)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-
-                if playerGui then
-                    local function triggerMobileButton(pathName)
-                        local targetElem = playerGui
-                        for _, v in ipairs(pathName) do
-                            if targetElem then targetElem = targetElem:FindFirstChild(v) end
-                        end
-                        if targetElem and targetElem.AbsolutePosition.X > 0 and targetElem.AbsoluteSize.X > 0 then
-                            local posX = targetElem.AbsolutePosition.X + (targetElem.AbsoluteSize.X / 2)
-                            local posY = targetElem.AbsolutePosition.Y + (targetElem.AbsoluteSize.Y / 2)
-                            VirtualInputManager:SendMouseButtonEvent(posX, posY, 0, true, game, 1)
-                            task.wait(0.02)
-                            VirtualInputManager:SendMouseButtonEvent(posX, posY, 0, false, game, 1)
+                for _, key in ipairs(skills) do
+                    if not attackActive or not selectedAttackTarget then break end
+                    
+                    local success = false
+                    while not success and attackActive and selectedAttackTarget do
+                        pcall(function()
+                            VirtualInputManager:SendKeyEvent(true, key, false, game)
+                            task.wait(0.03)
+                            VirtualInputManager:SendKeyEvent(false, key, false, game)
+                            
+                            local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                            if playerGui then
+                                local hotbar = playerGui:FindFirstChild("Hotbar")
+                                if hotbar then
+                                    local backpackUI = hotbar:FindFirstChild("Backpack") or hotbar:FindFirstChild("MobileButtons") or hotbar:FindFirstChild("Skills")
+                                    if backpackUI and backpackUI.AbsolutePosition.X > 0 then
+                                        local sectionWidth = backpackUI.AbsoluteSize.X / 4
+                                        local targetX = backpackUI.AbsolutePosition.X + (sectionWidth * (math.random(0, 3))) + (sectionWidth / 2)
+                                        local targetY = backpackUI.AbsolutePosition.Y + (backpackUI.AbsoluteSize.Y / 2)
+                                        VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, true, game, 1)
+                                        task.wait(0.01)
+                                        VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, false, game, 1)
+                                    end
+                                end
+                            end
+                            success = true
+                        end)
+                        if not success then
+                            task.wait(0.05)
                         end
                     end
-
-                    triggerMobileButton({"Hotbar", "Backpack"})
-                    triggerMobileButton({"MobileButtons", "Combat", "Punch"})
+                    
+                    task.wait(1.0)
                 end
             end)
-            task.wait(0.25) -- Tổng chu kì chính xác ~0.5 giây cho 2 cú đấm
         else
-            task.wait(0.5)
+            task.wait(0.2)
         end
     end
 end)
 
 ---------------------------------------------------------
--- 3. EXTREME ANTI-LAG (BAN NGÀY), ANTI-AFK ENGINE & SAFETY FLOOR (Y=100)
+-- 3. EXTREME ANTI-LAG (BAN NGÀY), ANTI-AFK ENGINE & AUTO BẬT NỘ (AWAKENING)
 ---------------------------------------------------------
 local ExtremeBtn = Instance.new("TextButton")
 ExtremeBtn.Size = UDim2.new(1, 0, 0, 35)
 ExtremeBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 120)
 ExtremeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ExtremeBtn.Text = "Bật Extreme Anti-Lag (Ban Ngày) + Sàn Y100 + Anti-AFK"
+ExtremeBtn.Text = "Bật Extreme Anti-Lag (Ban Ngày) + Auto Nộ + Anti-AFK"
 ExtremeBtn.TextSize = 13
 ExtremeBtn.Font = Enum.Font.SourceSansBold
 ExtremeBtn.Parent = ContentContainer
@@ -461,11 +502,8 @@ ExtremeBtn.MouseButton1Click:Connect(function()
     if extremeActivated then return end
     extremeActivated = true
     ExtremeBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
-    ExtremeBtn.Text = "Đã Bật Anti-Lag Ban Ngày & Sàn Y100"
+    ExtremeBtn.Text = "Đã Bật Anti-Lag Ban Ngày & Auto Nộ"
 
-    -- =======================================================
-    -- 1. AUTOMATIC ANTI-AFK ENGINE
-    -- =======================================================
     task.spawn(function()
         local VirtualUser = game:GetService("VirtualUser")
         
@@ -474,44 +512,35 @@ ExtremeBtn.MouseButton1Click:Connect(function()
             VirtualUser:ClickButton2(Vector2.new(0, 0))
         end)
         
-        while task.wait(300) do
+        while true do
             pcall(function()
-                VirtualUser:CaptureController()
-                VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                task.wait(0.1)
-                VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
+                
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                if playerGui then
+                    local function clickGuiPath(path)
+                        local elem = playerGui
+                        for _, v in ipairs(path) do
+                            if elem then elem = elem:FindFirstChild(v) end
+                        end
+                        if elem and elem.AbsolutePosition.X > 0 and elem.AbsoluteSize.X > 0 then
+                            local x = elem.AbsolutePosition.X + (elem.AbsoluteSize.X / 2)
+                            local y = elem.AbsolutePosition.Y + (elem.AbsoluteSize.Y / 2)
+                            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+                            task.wait(0.02)
+                            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+                        end
+                    end
+                    clickGuiPath({"MobileButtons", "Awakening"})
+                    clickGuiPath({"TouchGui", "AwakeningButton"})
+                end
             end)
+            task.wait(10)
         end
     end)
 
-    -- =========================================================
-    -- 2. CREATE SAFETY FLOOR (CỐ ĐỊNH Y = 100, DI CHUYỂN X, Z)
-    -- =========================================================
-    local floorName = "TSB_SafetyFloor_Y100"
-    local oldFloor = workspace:FindFirstChild(floorName)
-    if oldFloor then oldFloor:Destroy() end
-
-    local safetyFloor = Instance.new("Part")
-    safetyFloor.Name = floorName
-    safetyFloor.Size = Vector3.new(100, 5, 100)
-    safetyFloor.Anchored = true
-    safetyFloor.CanCollide = true
-    safetyFloor.Transparency = 0.5 
-    safetyFloor.Material = Enum.Material.SmoothPlastic
-    safetyFloor.Color = Color3.fromRGB(0, 255, 150)
-    safetyFloor.Parent = workspace
-
-    RunService.Heartbeat:Connect(function()
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local hrpPos = char.HumanoidRootPart.Position
-            safetyFloor.CFrame = CFrame.new(hrpPos.X, 100, hrpPos.Z)
-        end
-    end)
-
-    -- =========================================================
-    -- 3. EXTREME ANTI-LAG (BAN NGÀY & HIỆN NGƯỜI CHƠI)
-    -- =========================================================
     local SoundService = game:GetService("SoundService")
     local StarterGui = game:GetService("StarterGui")
 
@@ -525,8 +554,6 @@ ExtremeBtn.MouseButton1Click:Connect(function()
     end
 
     local function cleanObject(obj)
-        if obj == safetyFloor then return end
-
         if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") 
            or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Explosion") 
            or obj:IsA("Sparkles") or obj:IsA("Highlight") or obj:IsA("Decal") 
@@ -549,16 +576,11 @@ ExtremeBtn.MouseButton1Click:Connect(function()
     local function nukeEverything()
         pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
         
-        -- ÁNH SÁNG BAN NGÀY
         Lighting.Brightness = 2
         Lighting.ClockTime = 14
         Lighting.Ambient = Color3.fromRGB(150, 150, 150)
         Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
         Lighting.GlobalShadows = false
-        
-        for _, obj in ipairs(Lighting:GetChildren()) do 
-            if not obj:IsA("Atmosphere") and not obj:IsA("Sky") then end 
-        end
         
         for _, sound in ipairs(SoundService:GetDescendants()) do 
             if sound:IsA("Sound") and not isPlayerCharacter(sound) then 
