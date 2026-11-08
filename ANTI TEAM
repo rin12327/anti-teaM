@@ -1,25 +1,44 @@
---// TSB Ultimate Script - PC & Mobile (Continuous Non-Stop Attack Loop)
+--// TSB Ultimate Script v2 - PC & Mobile
+--// Sửa: Extreme Anti-Lag (xóa sạch trừ người chơi) + Anti-Void, Fling dự đoán hướng chạy,
+--//      Tự đánh chạy được trên điện thoại, không cần chọn người vẫn tự đánh.
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local Lighting = game:GetService("Lighting")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
+local SoundService = game:GetService("SoundService")
+local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+local running = true
+local connections = {}
+local function track(conn)
+    table.insert(connections, conn)
+    return conn
+end
+
+local platform, safeCenter -- sàn an toàn (anti-void)
 
 -- Xóa GUI cũ nếu có
-if CoreGui:FindFirstChild("TSB_MasterGUI") then
-    CoreGui.TSB_MasterGUI:Destroy()
-end
-if CoreGui:FindFirstChild("TSB_BubbleGUI") then
-    CoreGui.TSB_BubbleGUI:Destroy()
-end
-if CoreGui:FindFirstChild("TSB_DeleteZoneGUI") then
-    CoreGui.TSB_DeleteZoneGUI:Destroy()
+for _, n in ipairs({"TSB_MasterGUI", "TSB_BubbleGUI", "TSB_DeleteZoneGUI"}) do
+    local old = CoreGui:FindFirstChild(n)
+    if old then old:Destroy() end
 end
 
--- Tạo ScreenGui chính
+local function getChar()
+    local c = LocalPlayer.Character
+    if not c then return nil end
+    return c, c:FindFirstChild("HumanoidRootPart"), c:FindFirstChildOfClass("Humanoid")
+end
+
+---------------------------------------------------------
+-- GUI CHÍNH
+---------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "TSB_MasterGUI"
 ScreenGui.Parent = CoreGui
@@ -41,7 +60,7 @@ local TitleBar = Instance.new("TextLabel")
 TitleBar.Size = UDim2.new(1, 0, 0, 40)
 TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 TitleBar.BackgroundTransparency = 0.4
-TitleBar.Text = "TSB Ultimate Tool - Ronaldo Pro"
+TitleBar.Text = "TSB Ultimate Tool v2 - Ronaldo Pro"
 TitleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleBar.TextSize = 15
 TitleBar.Font = Enum.Font.SourceSansBold
@@ -68,14 +87,12 @@ CloseBtn.TextSize = 14
 CloseBtn.Parent = TitleBar
 local CloseCorner = Instance.new("UICorner") CloseCorner.CornerRadius = UDim.new(0, 6) CloseCorner.Parent = CloseBtn
 
-CloseBtn.MouseButton1Click:Connect(function() 
-    ScreenGui:Destroy() 
-    if CoreGui:FindFirstChild("TSB_BubbleGUI") then
-        CoreGui.TSB_BubbleGUI:Destroy()
-    end
-    if CoreGui:FindFirstChild("TSB_DeleteZoneGUI") then
-        CoreGui.TSB_DeleteZoneGUI:Destroy()
-    end
+CloseBtn.MouseButton1Click:Connect(function()
+    local b = CoreGui:FindFirstChild("TSB_BubbleGUI")
+    local d = CoreGui:FindFirstChild("TSB_DeleteZoneGUI")
+    ScreenGui:Destroy()
+    if b then b:Destroy() end
+    if d then d:Destroy() end
 end)
 
 local minimized = false
@@ -101,15 +118,15 @@ TitleBar.InputBegan:Connect(function(input)
     end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+track(UserInputService.InputChanged:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
         local delta = input.Position - dragStart
         MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-end)
+end))
 
 ---------------------------------------------------------
--- NÚT BONG BÓNG BÊN TRÁI MÀN HÌNH & KÉO THẢ VÀO X ĐỂ XÓA
+-- NÚT BONG BÓNG & VÙNG KÉO THẢ ĐỂ XÓA
 ---------------------------------------------------------
 local DeleteZoneGui = Instance.new("ScreenGui")
 DeleteZoneGui.Name = "TSB_DeleteZoneGUI"
@@ -156,6 +173,21 @@ local BubbleCorner = Instance.new("UICorner")
 BubbleCorner.CornerRadius = UDim.new(1, 0)
 BubbleCorner.Parent = BubbleBtn
 
+-- Dòng gợi ý khi hiệu chỉnh nút đánh
+local HintLabel = Instance.new("TextLabel")
+HintLabel.Size = UDim2.new(0, 320, 0, 40)
+HintLabel.Position = UDim2.new(0.5, -160, 0, 10)
+HintLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+HintLabel.BackgroundTransparency = 0.3
+HintLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+HintLabel.TextSize = 14
+HintLabel.Font = Enum.Font.SourceSansBold
+HintLabel.TextWrapped = true
+HintLabel.Text = "Chạm vào NÚT ĐÁNH THƯỜNG trên màn hình (10 giây)"
+HintLabel.Visible = false
+HintLabel.Parent = BubbleGui
+local HintCorner = Instance.new("UICorner") HintCorner.CornerRadius = UDim.new(0, 8) HintCorner.Parent = HintLabel
+
 local bubbleDragging = false
 local bubbleDragStart = Vector2.new(0, 0)
 local bubbleStartPos = UDim2.new(0, 20, 0.4, 0)
@@ -168,12 +200,12 @@ BubbleBtn.InputBegan:Connect(function(input)
         bubbleStartPos = BubbleBtn.Position
         hasMoved = false
         DeleteZone.Visible = true
-        
+
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 bubbleDragging = false
                 DeleteZone.Visible = false
-                
+
                 local absPos = BubbleBtn.AbsolutePosition
                 local zonePos = DeleteZone.AbsolutePosition
                 local distance = (absPos - zonePos).Magnitude
@@ -189,7 +221,7 @@ BubbleBtn.InputBegan:Connect(function(input)
     end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+track(UserInputService.InputChanged:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and bubbleDragging then
         local delta = input.Position - bubbleDragStart
         if delta.Magnitude > 5 then
@@ -197,13 +229,14 @@ UserInputService.InputChanged:Connect(function(input)
         end
         BubbleBtn.Position = UDim2.new(bubbleStartPos.X.Scale, bubbleStartPos.X.Offset + delta.X, bubbleStartPos.Y.Scale, bubbleStartPos.Y.Offset + delta.Y)
     end
-end)
+end))
 
 local ContentContainer = Instance.new("ScrollingFrame")
 ContentContainer.Size = UDim2.new(1, -20, 1, -60)
 ContentContainer.Position = UDim2.new(0, 10, 0, 50)
 ContentContainer.BackgroundTransparency = 1
-ContentContainer.CanvasSize = UDim2.new(0, 0, 4, 0)
+ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+ContentContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 ContentContainer.ScrollBarThickness = 6
 ContentContainer.Parent = MainFrame
 
@@ -212,8 +245,114 @@ UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 10)
 UIListLayout.Parent = ContentContainer
 
+local function makeButton(text, color, height)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, height or 32)
+    b.BackgroundColor3 = color
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.Text = text
+    b.TextSize = 13
+    b.Font = Enum.Font.SourceSansBold
+    b.TextWrapped = true
+    b.Parent = ContentContainer
+    local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 6) c.Parent = b
+    return b
+end
+
+local GREEN = Color3.fromRGB(40, 180, 40)
+local ORANGE = Color3.fromRGB(180, 80, 40)
+local BLUE = Color3.fromRGB(50, 50, 180)
+
 ---------------------------------------------------------
--- CHỌN NGƯỜI CHƠI (CÓ HIỂN THỊ BIẾT DANH / DISPLAY NAME)
+-- TIỆN ÍCH CLICK / TOUCH (có tính GUI inset + khóa chống chồng input)
+---------------------------------------------------------
+local inputBusy = false
+
+local function tapScreen(x, y, holdTime, touchId)
+    while inputBusy do task.wait() end
+    inputBusy = true
+    holdTime = holdTime or 0.03
+    touchId = touchId or 7
+    pcall(function()
+        if isMobile then
+            pcall(function() VirtualInputManager:SendTouchEvent(touchId, 0, x, y) end)
+        end
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+        task.wait(holdTime)
+        if isMobile then
+            pcall(function() VirtualInputManager:SendTouchEvent(touchId, 2, x, y) end)
+        end
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+    end)
+    inputBusy = false
+end
+
+local function guiInset(elem)
+    local sg = elem:FindFirstAncestorOfClass("ScreenGui")
+    if sg and sg.IgnoreGuiInset then return Vector2.new(0, 0) end
+    return GuiService:GetGuiInset()
+end
+
+local function guiCenter(elem)
+    local inset = guiInset(elem)
+    return elem.AbsolutePosition.X + elem.AbsoluteSize.X / 2 + inset.X,
+           elem.AbsolutePosition.Y + elem.AbsoluteSize.Y / 2 + inset.Y
+end
+
+-- Dò nút đánh thường trên giao diện điện thoại
+local function matchAttackName(n)
+    if n == "m1" or n:find("^m1") then return true end
+    for _, key in ipairs({"attack", "punch", "combat", "fist"}) do
+        if n:find(key, 1, true) then return true end
+    end
+    return false
+end
+
+local function findAttackButton()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return nil end
+    for _, d in ipairs(pg:GetDescendants()) do
+        if (d:IsA("ImageButton") or d:IsA("TextButton")) and d.Visible and d.AbsoluteSize.X > 10 then
+            local n = d.Name:lower()
+            local t = d:IsA("TextButton") and d.Text:lower() or ""
+            if matchAttackName(n) or t == "m1" or t == "attack" or t == "punch" then
+                return d
+            end
+        end
+    end
+    return nil
+end
+
+local calibratedPos = nil
+local cachedAttackBtn = nil
+
+local function doM1()
+    -- 1) Vị trí người dùng tự hiệu chỉnh (chắc chắn nhất trên điện thoại)
+    if calibratedPos then
+        tapScreen(calibratedPos.X, calibratedPos.Y, 0.03, 7)
+        return
+    end
+    -- 2) Tự dò nút đánh trên điện thoại
+    if isMobile then
+        if not (cachedAttackBtn and cachedAttackBtn.Parent) then
+            cachedAttackBtn = findAttackButton()
+        end
+        if cachedAttackBtn then
+            if firesignal then
+                pcall(firesignal, cachedAttackBtn.MouseButton1Down)
+                pcall(firesignal, cachedAttackBtn.Activated)
+            end
+            local x, y = guiCenter(cachedAttackBtn)
+            tapScreen(x, y, 0.03, 7)
+            return
+        end
+    end
+    -- 3) PC: click chuột trái như cũ
+    tapScreen(0, 0, 0.02, 7)
+end
+
+---------------------------------------------------------
+-- CHỌN NGƯỜI CHƠI (HIỂN THỊ DISPLAY NAME)
 ---------------------------------------------------------
 local selectedFlingPlayers = {}
 local selectedAttackTarget = nil
@@ -227,6 +366,7 @@ local function createPlayerDropdown(titleText, isMultiSelect, callback)
     Label.TextSize = 13
     Label.Font = Enum.Font.SourceSansBold
     Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.TextWrapped = true
     Label.Parent = ContentContainer
 
     local DropContainer = Instance.new("ScrollingFrame")
@@ -272,13 +412,47 @@ local function createPlayerDropdown(titleText, isMultiSelect, callback)
         end
         DropContainer.CanvasSize = UDim2.new(0, 0, 0, #Players:GetPlayers() * 30)
     end
-    Players.PlayerAdded:Connect(refreshList)
-    Players.PlayerRemoving:Connect(refreshList)
+    track(Players.PlayerAdded:Connect(refreshList))
+    track(Players.PlayerRemoving:Connect(function() task.defer(refreshList) end))
     refreshList()
 end
 
 ---------------------------------------------------------
--- 1. HỆ THỐNG FLING (CÓ DỰ ĐOÁN HITBOX THEO TỐC ĐỘ DI CHUYỂN)
+-- BỘ ĐOÁN VẬN TỐC (tính từ độ dời vị trí thực tế, chính xác hơn Velocity)
+---------------------------------------------------------
+local function newTracker()
+    local t = {pos = nil, time = 0, vel = Vector3.zero}
+    function t.update(part)
+        local now = tick()
+        if not t.pos then
+            t.pos = part.Position
+            t.time = now
+            return t.vel
+        end
+        local dt = now - t.time
+        if dt >= 1 / 120 then
+            local raw = (part.Position - t.pos) / dt
+            t.vel = t.vel:Lerp(raw, 0.5)
+            t.pos = part.Position
+            t.time = now
+        end
+        return t.vel
+    end
+    function t.reset()
+        t.pos = nil
+        t.vel = Vector3.zero
+    end
+    return t
+end
+
+local function getLead()
+    local ok, ping = pcall(function() return LocalPlayer:GetNetworkPing() end)
+    ping = ok and ping or 0.1
+    return math.clamp(ping + 0.05, 0.06, 0.3)
+end
+
+---------------------------------------------------------
+-- 1. FLING (dự đoán hướng chạy + đổi vị trí liên tục quanh hitbox)
 ---------------------------------------------------------
 createPlayerDropdown("Chọn người chơi Fling (Chọn nhiều):", true, function(name)
     local idx = table.find(selectedFlingPlayers, name)
@@ -287,197 +461,242 @@ end)
 
 local startPosFling = nil
 local currentFlingIndex = 1
-local flingMode = nil 
+local flingMode = nil
+local flingTargetName = nil
+local flingStartT = 0
+local flingCycle = 0
+local flingTracker = newTracker()
 
-local FlingOnceBtn = Instance.new("TextButton")
-FlingOnceBtn.Size = UDim2.new(1, 0, 0, 32)
-FlingOnceBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
-FlingOnceBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FlingOnceBtn.Text = "Bật/Tắt Fling 1 Lần"
-FlingOnceBtn.TextSize = 13
-FlingOnceBtn.Font = Enum.Font.SourceSansBold
-FlingOnceBtn.Parent = ContentContainer
+local FlingOnceBtn = makeButton("Bật/Tắt Fling 1 Lần", ORANGE, 32)
+local FlingLoopBtn = makeButton("Bật/Tắt Fling Liên Tục", ORANGE, 32)
 
-local FlingLoopBtn = Instance.new("TextButton")
-FlingLoopBtn.Size = UDim2.new(1, 0, 0, 32)
-FlingLoopBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
-FlingLoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FlingLoopBtn.Text = "Bật/Tắt Fling Liên Tục"
-FlingLoopBtn.TextSize = 13
-FlingLoopBtn.Font = Enum.Font.SourceSansBold
-FlingLoopBtn.Parent = ContentContainer
+local function setFlingButtons()
+    FlingOnceBtn.BackgroundColor3 = (flingMode == "ONCE") and GREEN or ORANGE
+    FlingLoopBtn.BackgroundColor3 = (flingMode == "LOOP") and GREEN or ORANGE
+end
 
-local function toggleFling(mode, btn)
-    local char = LocalPlayer.Character
+local function stopFling()
+    flingMode = nil
+    flingTargetName = nil
+    setFlingButtons()
+    local _, hrp, hum = getChar()
+    if hum then hum.PlatformStand = false end
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        if startPosFling then hrp.CFrame = startPosFling end
+    end
+    startPosFling = nil
+end
+
+local function toggleFling(mode)
     if flingMode == mode then
-        flingMode = nil
-        btn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
-        if startPosFling and char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = startPosFling
-            startPosFling = nil
-        end
+        stopFling()
     else
         flingMode = mode
         currentFlingIndex = 1
-        btn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
-        if char and char:FindFirstChild("HumanoidRootPart") and not startPosFling then
-            startPosFling = char.HumanoidRootPart.CFrame
-        end
+        flingTargetName = nil
+        local _, hrp = getChar()
+        if hrp and not startPosFling then startPosFling = hrp.CFrame end
+        setFlingButtons()
     end
 end
 
-FlingOnceBtn.MouseButton1Click:Connect(function() toggleFling("ONCE", FlingOnceBtn) end)
-FlingLoopBtn.MouseButton1Click:Connect(function() toggleFling("LOOP", FlingLoopBtn) end)
+FlingOnceBtn.MouseButton1Click:Connect(function() toggleFling("ONCE") end)
+FlingLoopBtn.MouseButton1Click:Connect(function() toggleFling("LOOP") end)
 
-local flipJitter = false
-RunService.Heartbeat:Connect(function()
+local function nextFlingTarget()
+    currentFlingIndex = currentFlingIndex + 1
+    flingTargetName = nil
+end
+
+track(RunService.Heartbeat:Connect(function()
     if not flingMode or #selectedFlingPlayers == 0 then return end
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local hrp = char.HumanoidRootPart
+    local _, hrp, hum = getChar()
+    if not hrp or not hum then return end
 
     if currentFlingIndex > #selectedFlingPlayers then
         if flingMode == "ONCE" then
-            flingMode = nil
-            FlingOnceBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
-            if startPosFling then
-                hrp.CFrame = startPosFling
-                startPosFling = nil
-            end
+            stopFling()
             return
         else
             currentFlingIndex = 1
         end
     end
-    
-    local targetName = selectedFlingPlayers[currentFlingIndex]
-    local p = Players:FindFirstChild(targetName)
-    
-    if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-        local targetHRP = p.Character.HumanoidRootPart
-        local tVel = targetHRP.AssemblyLinearVelocity
-        
-        local moveDir = tVel.Magnitude > 2 and tVel.Unit or targetHRP.CFrame.LookVector
-        local predictedPos = targetHRP.Position + (tVel * 0.2)
-        
-        flipJitter = not flipJitter
-        local jitterOffset = flipJitter and 2 or -2 
-        
-        hrp.CFrame = CFrame.new(predictedPos + (moveDir * jitterOffset))
-        
-        hrp.AssemblyLinearVelocity = Vector3.new(12000, 4000, 12000)
-        hrp.AssemblyAngularVelocity = Vector3.new(15000, 15000, 15000)
-        
-        local distance = (targetHRP.Position - hrp.Position).Magnitude
-        if distance > 120 or (p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health <= 0) then
-            currentFlingIndex = currentFlingIndex + 1
-        end
+
+    local name = selectedFlingPlayers[currentFlingIndex]
+    local p = Players:FindFirstChild(name)
+    local tChar = p and p.Character
+    local tHRP = tChar and tChar:FindFirstChild("HumanoidRootPart")
+    local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+    if not tHRP or not tHum or tHum.Health <= 0 then
+        nextFlingTarget()
+        return
+    end
+
+    if flingTargetName ~= name then
+        flingTargetName = name
+        flingStartT = tick()
+        flingTracker.reset()
+    end
+
+    if not hum.PlatformStand then hum.PlatformStand = true end
+
+    local vel = flingTracker.update(tHRP)
+    local moveVel = tHum.MoveDirection * tHum.WalkSpeed
+    if moveVel.Magnitude > vel.Magnitude then vel = moveVel end
+
+    -- Nạn nhân đã bị hất bay quá nhanh hoặc quá 3 giây -> sang người tiếp theo
+    if vel.Magnitude > 300 or (tick() - flingStartT) > 3 then
+        nextFlingTarget()
+        return
+    end
+
+    local speed = vel.Magnitude
+    local dir = speed > 1 and vel.Unit or tHRP.CFrame.LookVector
+    local lead = getLead()
+    local predicted = tHRP.Position + vel * lead
+
+    -- Xoay vòng nhiều vị trí quanh hitbox (đầu hướng chạy, sau lưng, trên, dưới...) để chắc chắn va chạm
+    flingCycle = flingCycle + 1
+    local offsets = {
+        Vector3.new(0, 0, 0),
+        dir * 3,
+        dir * -3,
+        Vector3.new(0, 2, 0),
+        Vector3.new(0, -1.5, 0),
+        dir * 6 + Vector3.new(0, 1, 0),
+    }
+    local o = offsets[(flingCycle % #offsets) + 1]
+    hrp.CFrame = CFrame.new(predicted + o)
+
+    local s = (flingCycle % 2 == 0) and 1 or -1
+    hrp.AssemblyLinearVelocity = Vector3.new(12000 * s, 4000, 12000 * s)
+    hrp.AssemblyAngularVelocity = Vector3.new(15000, 15000, 15000)
+end))
+
+---------------------------------------------------------
+-- 2. TỰ ĐÁNH + TUNG CHIÊU (có chọn mục tiêu thì ghim sau lưng, không chọn thì đánh bình thường)
+---------------------------------------------------------
+createPlayerDropdown("Chọn 1 mục tiêu để Ghim (bấm lại để bỏ chọn). Không chọn = tự đánh bình thường:", false, function(name)
+    if selectedAttackTarget == name then
+        selectedAttackTarget = nil
     else
-        currentFlingIndex = currentFlingIndex + 1
+        selectedAttackTarget = name
     end
 end)
 
----------------------------------------------------------
--- 2. GHIM ĐÁNH VÀ TÙNG CHIÊU (ĐỨNG SAU LƯNG 5 STUDS, DỰ ĐOÁN ĐÓN ĐẦU CHUYỂN ĐỘNG)
----------------------------------------------------------
-createPlayerDropdown("Chọn 1 mục tiêu Ghim & Đánh (Sáng Xanh):", false, function(name)
-    selectedAttackTarget = name
-end)
-
-local AttackToggleBtn = Instance.new("TextButton")
-AttackToggleBtn.Size = UDim2.new(1, 0, 0, 32)
-AttackToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 180)
-AttackToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AttackToggleBtn.Text = "Bật Ghim Vị Trí & Tự Tung Chiêu (5 Studs - Có Dự Đoán Đón Đầu)"
-AttackToggleBtn.TextSize = 13
-AttackToggleBtn.Font = Enum.Font.SourceSansBold
-AttackToggleBtn.Parent = ContentContainer
+local AttackToggleBtn = makeButton("Bật/Tắt Tự Đánh + Tung Chiêu 1-4 (có chọn mục tiêu sẽ ghim sau lưng 5 studs)", BLUE, 44)
+local CalibBtn = makeButton("Hiệu chỉnh nút đánh thường (cho điện thoại)", Color3.fromRGB(120, 60, 160), 32)
 
 local attackActive = false
 AttackToggleBtn.MouseButton1Click:Connect(function()
     attackActive = not attackActive
-    AttackToggleBtn.BackgroundColor3 = attackActive and Color3.fromRGB(40, 180, 40) or Color3.fromRGB(50, 50, 180)
+    AttackToggleBtn.BackgroundColor3 = attackActive and GREEN or BLUE
 end)
 
-RunService.Heartbeat:Connect(function()
-    if not attackActive or not selectedAttackTarget then return end
+-- Hiệu chỉnh: ẩn menu, người dùng chạm 1 lần vào nút đánh thường, script lưu vị trí đó
+local calibrating = false
+local function endCalibration()
+    calibrating = false
+    HintLabel.Visible = false
+    ScreenGui.Enabled = true
+end
+
+CalibBtn.MouseButton1Click:Connect(function()
+    calibrating = true
+    ScreenGui.Enabled = false
+    HintLabel.Visible = true
+    task.delay(10, function()
+        if calibrating then endCalibration() end
+    end)
+end)
+
+track(UserInputService.InputBegan:Connect(function(input)
+    if not calibrating then return end
+    if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    local p = Vector2.new(input.Position.X, input.Position.Y)
+    -- bỏ qua chạm vào bong bóng TSB
+    local bp, bs = BubbleBtn.AbsolutePosition, BubbleBtn.AbsoluteSize
+    if p.X >= bp.X and p.X <= bp.X + bs.X and p.Y >= bp.Y and p.Y <= bp.Y + bs.Y then return end
+    local inset = GuiService:GetGuiInset()
+    calibratedPos = Vector2.new(p.X + inset.X, p.Y + inset.Y)
+    CalibBtn.Text = "Đã lưu vị trí nút đánh (bấm để chọn lại)"
+    CalibBtn.BackgroundColor3 = Color3.fromRGB(60, 140, 90)
+    endCalibration()
+end))
+
+-- Ghim vị trí sau lưng mục tiêu (có dự đoán đón đầu)
+local attackTracker = newTracker()
+local lastAttackTarget = nil
+track(RunService.Heartbeat:Connect(function()
+    if not attackActive or not selectedAttackTarget or flingMode then return end
     local p = Players:FindFirstChild(selectedAttackTarget)
     if not p or not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then return end
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    local hrp = char.HumanoidRootPart
-    local targetHRP = p.Character.HumanoidRootPart
-    local tVel = targetHRP.AssemblyLinearVelocity
-    
-    -- THUẬT TOÁN DỰ ĐOÁN ĐÓN ĐẦU: Mục tiêu di chuyển tới đâu, ta tự động nhích lên đón đầu hướng đó để bù độ trễ mạng
-    local predictedTargetPos = targetHRP.Position + (tVel * 0.15)
-    hrp.CFrame = CFrame.new(predictedTargetPos - (targetHRP.CFrame.LookVector * 5), targetHRP.Position)
-    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-end)
+    local _, hrp = getChar()
+    if not hrp then return end
 
--- LUỒNG RIÊNG 1: ĐÁNH THƯỜNG LIÊN TỤC KHÔNG NGẮT NHỊP (2 cái trong 0.6 giây, lặp lại vô tận)
+    local targetHRP = p.Character.HumanoidRootPart
+    if lastAttackTarget ~= selectedAttackTarget then
+        lastAttackTarget = selectedAttackTarget
+        attackTracker.reset()
+    end
+    local vel = attackTracker.update(targetHRP)
+    if vel.Magnitude > 200 then vel = Vector3.zero end
+
+    local predicted = targetHRP.Position + vel * getLead()
+    local look = targetHRP.CFrame.LookVector
+    look = Vector3.new(look.X, 0, look.Z)
+    if look.Magnitude < 0.01 then return end
+    look = look.Unit
+
+    hrp.CFrame = CFrame.lookAt(predicted - look * 5, Vector3.new(predicted.X, predicted.Y, predicted.Z))
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+end))
+
+-- LUỒNG 1: ĐÁNH THƯỜNG LIÊN TỤC (không cần chọn mục tiêu)
+local ATTACK_DELAY = 0.25
 task.spawn(function()
-    while true do
-        if attackActive and selectedAttackTarget then
-            pcall(function()
-                for i = 1, 2 do
-                    if not attackActive or not selectedAttackTarget then break end
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                    task.wait(0.28)
-                end
-            end)
+    while running do
+        if attackActive then
+            pcall(doM1)
+            task.wait(ATTACK_DELAY)
         else
             task.wait(0.1)
         end
-        task.wait()
     end
 end)
 
--- LUỒNG RIÊNG 2: TỰ ĐỘNG TUNG CHIÊU 1, 2, 3, 4 (Mỗi chiêu cách nhau đúng 1 giây)
+-- LUỒNG 2: TỰ TUNG CHIÊU 1,2,3,4 (mỗi chiêu cách 1 giây, không cần chọn mục tiêu)
+local function clickSkillGui(i)
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    local hotbar = pg and pg:FindFirstChild("Hotbar")
+    if not hotbar then return end
+    local ui = hotbar:FindFirstChild("Backpack") or hotbar:FindFirstChild("MobileButtons") or hotbar:FindFirstChild("Skills")
+    if ui and ui.AbsoluteSize.X > 0 and ui.AbsolutePosition.X > 0 then
+        local sw = ui.AbsoluteSize.X / 4
+        local inset = guiInset(ui)
+        local x = ui.AbsolutePosition.X + sw * (i - 1) + sw / 2 + inset.X
+        local y = ui.AbsolutePosition.Y + ui.AbsoluteSize.Y / 2 + inset.Y
+        tapScreen(x, y, 0.02, 8)
+    end
+end
+
 task.spawn(function()
     local skills = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
-    while true do
-        if attackActive and selectedAttackTarget then
-            pcall(function()
-                for _, key in ipairs(skills) do
-                    if not attackActive or not selectedAttackTarget then break end
-                    
-                    local success = false
-                    while not success and attackActive and selectedAttackTarget do
-                        pcall(function()
-                            VirtualInputManager:SendKeyEvent(true, key, false, game)
-                            task.wait(0.03)
-                            VirtualInputManager:SendKeyEvent(false, key, false, game)
-                            
-                            local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                            if playerGui then
-                                local hotbar = playerGui:FindFirstChild("Hotbar")
-                                if hotbar then
-                                    local backpackUI = hotbar:FindFirstChild("Backpack") or hotbar:FindFirstChild("MobileButtons") or hotbar:FindFirstChild("Skills")
-                                    if backpackUI and backpackUI.AbsolutePosition.X > 0 then
-                                        local sectionWidth = backpackUI.AbsoluteSize.X / 4
-                                        local targetX = backpackUI.AbsolutePosition.X + (sectionWidth * (math.random(0, 3))) + (sectionWidth / 2)
-                                        local targetY = backpackUI.AbsolutePosition.Y + (backpackUI.AbsoluteSize.Y / 2)
-                                        VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, true, game, 1)
-                                        task.wait(0.01)
-                                        VirtualInputManager:SendMouseButtonEvent(targetX, targetY, 0, false, game, 1)
-                                    end
-                                end
-                            end
-                            success = true
-                        end)
-                        if not success then
-                            task.wait(0.05)
-                        end
-                    end
-                    
-                    task.wait(1.0)
-                end
-            end)
+    while running do
+        if attackActive then
+            for i, key in ipairs(skills) do
+                if not attackActive or not running then break end
+                pcall(function()
+                    VirtualInputManager:SendKeyEvent(true, key, false, game)
+                    task.wait(0.03)
+                    VirtualInputManager:SendKeyEvent(false, key, false, game)
+                    if isMobile then clickSkillGui(i) end
+                end)
+                task.wait(1.0)
+            end
         else
             task.wait(0.2)
         end
@@ -485,39 +704,292 @@ task.spawn(function()
 end)
 
 ---------------------------------------------------------
--- 3. EXTREME ANTI-LAG (BAN NGÀY), ANTI-AFK ENGINE & AUTO BẬT NỘ (AWAKENING)
+-- 3. ANTI-VOID (sàn an toàn + tự dịch chuyển về khi rơi)
 ---------------------------------------------------------
-local ExtremeBtn = Instance.new("TextButton")
-ExtremeBtn.Size = UDim2.new(1, 0, 0, 35)
-ExtremeBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 120)
-ExtremeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ExtremeBtn.Text = "Bật Extreme Anti-Lag (Ban Ngày) + Auto Nộ + Anti-AFK"
-ExtremeBtn.TextSize = 13
-ExtremeBtn.Font = Enum.Font.SourceSansBold
-ExtremeBtn.Parent = ContentContainer
+local antiVoidOn = false
+local purged = false
+local lastGround = nil
 
+local function computeFloor()
+    local c, hrp, hum = getChar()
+    if not hrp then return nil end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {c}
+    local res = workspace:Raycast(hrp.Position, Vector3.new(0, -80, 0), params)
+    if res then return res.Position end
+    local h = (hum and hum.HipHeight or 2) + hrp.Size.Y / 2
+    return hrp.Position - Vector3.new(0, h, 0)
+end
+
+local function ensurePlatform()
+    if platform and platform.Parent then return end
+    local floor = computeFloor()
+    if not floor then return end
+    safeCenter = floor
+    platform = Instance.new("Part")
+    platform.Name = "TSB_SafePlatform"
+    platform.Anchored = true
+    platform.CanCollide = true
+    platform.CanTouch = false
+    platform.CastShadow = false
+    platform.Size = Vector3.new(4000, 2, 4000)
+    platform.CFrame = CFrame.new(floor.X, floor.Y - 1, floor.Z) -- mặt trên ngang mặt đất
+    platform.Material = Enum.Material.SmoothPlastic
+    platform.Color = Color3.fromRGB(90, 90, 90)
+    platform.Transparency = purged and 0 or 1
+    platform.Parent = workspace
+end
+
+local AntiVoidBtn = makeButton("Bật/Tắt Anti-Void (sàn an toàn, không chết vì rơi)", Color3.fromRGB(150, 110, 0), 32)
+
+local function setAntiVoid(on)
+    antiVoidOn = on
+    AntiVoidBtn.BackgroundColor3 = on and GREEN or Color3.fromRGB(150, 110, 0)
+    if on then ensurePlatform() end
+end
+AntiVoidBtn.MouseButton1Click:Connect(function() setAntiVoid(not antiVoidOn) end)
+
+local lastGroundT = 0
+track(RunService.Heartbeat:Connect(function()
+    if not antiVoidOn or not safeCenter then return end
+    if not (platform and platform.Parent) then ensurePlatform() end
+    local _, hrp, hum = getChar()
+    if not hrp or not hum then return end
+    local pos = hrp.Position
+    local lowLimit = safeCenter.Y - 40
+
+    if tick() - lastGroundT > 0.25 and hum.FloorMaterial ~= Enum.Material.Air and pos.Y > lowLimit + 20 then
+        lastGround = pos
+        lastGroundT = tick()
+    end
+
+    local flat = Vector2.new(pos.X - safeCenter.X, pos.Z - safeCenter.Z)
+    if pos.Y < lowLimit or flat.Magnitude > 1900 or pos.Y ~= pos.Y then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        local back = lastGround or (safeCenter + Vector3.new(0, 4, 0))
+        hrp.CFrame = CFrame.new(back + Vector3.new(0, 4, 0))
+    end
+end))
+
+---------------------------------------------------------
+-- 4. EXTREME ANTI-LAG: xóa sạch mọi thứ, chỉ chừa người chơi
+---------------------------------------------------------
+local ExtremeBtn = makeButton("Bật Extreme Anti-Lag (xóa hết map/hiệu ứng/âm thanh) + Auto Nộ + Anti-AFK + Anti-Void", Color3.fromRGB(0, 150, 120), 44)
 local extremeActivated = false
+
+local EFFECT_CLASSES = {
+    "ParticleEmitter", "Trail", "Beam", "Fire", "Smoke", "Sparkles", "Highlight", "Explosion",
+    "PointLight", "SpotLight", "SurfaceLight", "Sound", "Shirt", "Pants", "ShirtGraphic",
+    "SurfaceAppearance", "ForceField", "Texture",
+}
+
+local function isEffect(obj)
+    for _, cn in ipairs(EFFECT_CLASSES) do
+        if obj:IsA(cn) then return true end
+    end
+    return false
+end
+
+local function isCharacterModel(m)
+    if not m:IsA("Model") then return false end
+    if Players:GetPlayerFromCharacter(m) then return true end
+    return Players:FindFirstChild(m.Name) ~= nil and m:FindFirstChildOfClass("Humanoid") ~= nil
+end
+
+local function inPlayerCharacter(obj)
+    local m = obj
+    while m and m ~= workspace and m ~= game do
+        if isCharacterModel(m) then return true end
+        m = m.Parent
+    end
+    return false
+end
+
+local function containsPlayerCharacter(obj)
+    for _, pl in ipairs(Players:GetPlayers()) do
+        local ch = pl.Character
+        if ch and (ch == obj or ch:IsDescendantOf(obj)) then return true end
+        local f = obj:FindFirstChild(pl.Name, true)
+        if f and f:IsA("Model") and f:FindFirstChildOfClass("Humanoid") then return true end
+    end
+    return false
+end
+
+-- Làm mượt khối + xóa hiệu ứng trên người chơi
+local function cleanCharacterObject(obj)
+    if isEffect(obj) then
+        pcall(function() obj:Destroy() end)
+    elseif obj:IsA("BasePart") then
+        obj.Material = Enum.Material.SmoothPlastic
+        obj.CastShadow = false
+        obj.Reflectance = 0
+    end
+end
+
+local function cleanCharacter(ch)
+    for _, d in ipairs(ch:GetDescendants()) do
+        cleanCharacterObject(d)
+    end
+end
+
+local function shouldKeep(obj)
+    return obj == platform or obj:IsA("Camera") or obj:IsA("Terrain") or obj:IsA("SpawnLocation")
+end
+
+local function purge(container)
+    for _, child in ipairs(container:GetChildren()) do
+        if shouldKeep(child) then
+            -- giữ lại
+        elseif isCharacterModel(child) then
+            -- giữ nhân vật
+        elseif (child:IsA("Model") or child:IsA("Folder")) and containsPlayerCharacter(child) then
+            purge(child)
+        else
+            pcall(function() child:Destroy() end)
+        end
+    end
+end
+
+local function cleanLighting()
+    for _, o in ipairs(Lighting:GetChildren()) do
+        if o:IsA("Sky") or o:IsA("Atmosphere") or o:IsA("PostEffect") or o:IsA("Clouds") then
+            pcall(function() o:Destroy() end)
+        end
+    end
+    Lighting.GlobalShadows = false
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 9e9
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.Ambient = Color3.fromRGB(150, 150, 150)
+    Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
+    pcall(function() Lighting.ExposureCompensation = 0 end)
+    pcall(function() Lighting.EnvironmentDiffuseScale = 0 end)
+    pcall(function() Lighting.EnvironmentSpecularScale = 0 end)
+    pcall(function() sethiddenproperty(Lighting, "Technology", Enum.Technology.Legacy) end)
+end
+
+local function destroySounds(root)
+    if not root then return end
+    for _, d in ipairs(root:GetDescendants()) do
+        if d:IsA("Sound") then pcall(function() d:Destroy() end) end
+    end
+    track(root.DescendantAdded:Connect(function(d)
+        if d:IsA("Sound") then
+            task.defer(function() pcall(function() d:Destroy() end) end)
+        end
+    end))
+end
+
+local function purgeEverything()
+    -- Gom SpawnLocation ra ngoài workspace để giữ lại làm chỗ đứng
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("SpawnLocation") and not inPlayerCharacter(d) then
+            pcall(function() d.Parent = workspace end)
+        end
+    end
+
+    pcall(function() workspace.Terrain:Clear() end)
+    pcall(function()
+        for _, c in ipairs(workspace.Terrain:GetChildren()) do c:Destroy() end
+        workspace.Terrain.WaterWaveSize = 0
+        workspace.Terrain.WaterReflectance = 0
+        workspace.Terrain.WaterTransparency = 1
+    end)
+    pcall(function() sethiddenproperty(workspace.Terrain, "Decoration", false) end)
+
+    purge(workspace)
+
+    -- Spawn giữ lại: làm đơn giản, hiện rõ để đứng
+    for _, d in ipairs(workspace:GetChildren()) do
+        if d:IsA("SpawnLocation") then
+            d.Transparency = 0
+            d.CanCollide = true
+            d.Material = Enum.Material.SmoothPlastic
+            d.CastShadow = false
+            for _, x in ipairs(d:GetChildren()) do
+                if x:IsA("Decal") or x:IsA("Texture") then x:Destroy() end
+            end
+        end
+    end
+
+    -- Người chơi: làm mượt khối, bỏ hiệu ứng/quần áo
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl.Character then cleanCharacter(pl.Character) end
+    end
+
+    -- Ánh sáng, sương mù, bầu trời, hiệu ứng màn hình
+    cleanLighting()
+    track(Lighting.ChildAdded:Connect(function(o)
+        if o:IsA("Sky") or o:IsA("Atmosphere") or o:IsA("PostEffect") or o:IsA("Clouds") then
+            task.defer(function() pcall(function() o:Destroy() end) end)
+        end
+    end))
+    task.spawn(function()
+        while running do
+            cleanLighting()
+            task.wait(2)
+        end
+    end)
+
+    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+
+    -- Âm thanh
+    pcall(function() SoundService.AmbientReverb = Enum.ReverbType.NoReverb end)
+    destroySounds(workspace)
+    destroySounds(SoundService)
+    destroySounds(Lighting)
+    destroySounds(LocalPlayer:FindFirstChild("PlayerGui"))
+
+    -- Tắt UI mặc định của Roblox (giữ Backpack)
+    for _, t in ipairs({Enum.CoreGuiType.PlayerList, Enum.CoreGuiType.Chat, Enum.CoreGuiType.EmotesMenu, Enum.CoreGuiType.Health}) do
+        pcall(function() StarterGui:SetCoreGuiEnabled(t, false) end)
+    end
+
+    -- Mọi thứ mới sinh ra: xóa luôn, trừ người chơi (làm mượt)
+    track(workspace.DescendantAdded:Connect(function(obj)
+        local isContainer = obj:IsA("Model") or obj:IsA("Folder")
+        task.delay(isContainer and 0.4 or 0.08, function()
+            if not running or not obj:IsDescendantOf(workspace) then return end
+            if obj == platform or obj:IsA("Camera") or obj:IsA("Terrain") or obj:IsA("SpawnLocation") then return end
+            if inPlayerCharacter(obj) then
+                cleanCharacterObject(obj)
+                return
+            end
+            if isContainer and (isCharacterModel(obj) or containsPlayerCharacter(obj)) then return end
+            pcall(function() obj:Destroy() end)
+        end)
+    end))
+end
 
 ExtremeBtn.MouseButton1Click:Connect(function()
     if extremeActivated then return end
     extremeActivated = true
-    ExtremeBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
-    ExtremeBtn.Text = "Đã Bật Anti-Lag Ban Ngày & Auto Nộ"
+    ExtremeBtn.BackgroundColor3 = GREEN
+    ExtremeBtn.Text = "Đã Bật Extreme Anti-Lag + Auto Nộ + Anti-AFK + Anti-Void"
 
+    -- Tạo sàn an toàn TRƯỚC khi xóa map để dò đúng độ cao mặt đất
+    ensurePlatform()
+    purged = true
+    if platform then platform.Transparency = 0 end
+    setAntiVoid(true)
+
+    -- Anti-AFK + Auto Nộ (G) mỗi 10 giây
     task.spawn(function()
         local VirtualUser = game:GetService("VirtualUser")
-        
-        LocalPlayer.Idled:Connect(function()
+        track(LocalPlayer.Idled:Connect(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton2(Vector2.new(0, 0))
-        end)
-        
-        while true do
+        end))
+
+        while running do
             pcall(function()
                 VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
                 task.wait(0.05)
                 VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
-                
+
                 local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
                 if playerGui then
                     local function clickGuiPath(path)
@@ -525,12 +997,9 @@ ExtremeBtn.MouseButton1Click:Connect(function()
                         for _, v in ipairs(path) do
                             if elem then elem = elem:FindFirstChild(v) end
                         end
-                        if elem and elem.AbsolutePosition.X > 0 and elem.AbsoluteSize.X > 0 then
-                            local x = elem.AbsolutePosition.X + (elem.AbsoluteSize.X / 2)
-                            local y = elem.AbsolutePosition.Y + (elem.AbsoluteSize.Y / 2)
-                            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
-                            task.wait(0.02)
-                            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+                        if elem and elem:IsA("GuiObject") and elem.AbsolutePosition.X > 0 and elem.AbsoluteSize.X > 0 then
+                            local x, y = guiCenter(elem)
+                            tapScreen(x, y, 0.02, 9)
                         end
                     end
                     clickGuiPath({"MobileButtons", "Awakening"})
@@ -541,63 +1010,27 @@ ExtremeBtn.MouseButton1Click:Connect(function()
         end
     end)
 
-    local SoundService = game:GetService("SoundService")
-    local StarterGui = game:GetService("StarterGui")
+    purgeEverything()
+end)
 
-    local function isPlayerCharacter(obj)
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.Character and obj:IsDescendantOf(player.Character) then
-                return true
-            end
-        end
-        return false
+---------------------------------------------------------
+-- DỌN DẸP KHI TẮT MENU
+---------------------------------------------------------
+ScreenGui.Destroying:Connect(function()
+    running = false
+    attackActive = false
+    flingMode = nil
+    for _, c in ipairs(connections) do
+        pcall(function() c:Disconnect() end)
     end
-
-    local function cleanObject(obj)
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") 
-           or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Explosion") 
-           or obj:IsA("Sparkles") or obj:IsA("Highlight") or obj:IsA("Decal") 
-           or obj:IsA("Texture") or obj:IsA("Clouds") or obj:IsA("Sky") 
-           or obj:IsA("PostEffect") or obj:IsA("Atmosphere") or obj:IsA("Sound") then
-            
-            if not isPlayerCharacter(obj) then
-                obj:Destroy()
-            end
-            
-        elseif (obj:IsA("BasePart") or obj:IsA("MeshPart")) then
-            if not isPlayerCharacter(obj) then
-                obj.Transparency = 1
-                obj.CastShadow = false
-                obj.Material = Enum.Material.SmoothPlastic
-            end
-        end
+    local _, hrp, hum = getChar()
+    if hum then hum.PlatformStand = false end
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
     end
-
-    local function nukeEverything()
-        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
-        
-        Lighting.Brightness = 2
-        Lighting.ClockTime = 14
-        Lighting.Ambient = Color3.fromRGB(150, 150, 150)
-        Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
-        Lighting.GlobalShadows = false
-        
-        for _, sound in ipairs(SoundService:GetDescendants()) do 
-            if sound:IsA("Sound") and not isPlayerCharacter(sound) then 
-                sound:Destroy() 
-            end 
-        end
-
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            cleanObject(obj)
-        end
+    -- Giữ sàn lại nếu đã xóa map để không rơi void sau khi tắt menu
+    if platform and not purged then
+        pcall(function() platform:Destroy() end)
     end
-
-    nukeEverything()
-
-    workspace.DescendantAdded:Connect(function(obj)
-        task.delay(0.01, function()
-            cleanObject(obj)
-        end)
-    end)
 end)
