@@ -23,6 +23,7 @@ local SAFE_SPOT = Vector3.new(0, 0, 200)  -- chỗ đứng an toàn (mặt trên
 local FLING_STOP_SPEED = 250              -- nạn nhân có tốc độ > số này (studs/giây) = đã bị văng -> dừng fling người đó
 local FLING_MAX_TIME = 12                 -- an toàn: quá số giây này mà chưa văng thì qua người tiếp theo
 local ATTACK_DELAY = 0.25                 -- khoảng cách giữa 2 lần đánh thường
+local ATTACK_RANGE = 12                   -- chỉ đánh/tung chiêu khi có người chơi trong phạm vi này (studs)
 local USE_TOUCH_EVENTS = false            -- để false: tránh làm kẹt/liệt cảm ứng thật trên điện thoại
 
 local THEME = {
@@ -798,7 +799,7 @@ end)
 
 local AttackToggleBtn = makeButton(AttackPage, "", THEME.off, 36)
 local CalibBtn = makeButton(AttackPage, "Hiệu chỉnh nút đánh thường (điện thoại)", THEME.purple, 36)
-makeLabel(AttackPage, "Có chọn mục tiêu: ghim sau lưng 5 studs, quay mặt vào mục tiêu, đón đầu hướng chạy. Không chọn: chỉ đánh thường + tung chiêu 1-4. Nếu điện thoại không tự trúng nút đánh, bấm Hiệu chỉnh rồi chạm vào nút đánh thường 1 lần.", 100, THEME.sub, 11)
+makeLabel(AttackPage, "Có chọn mục tiêu: ghim sau lưng 5 studs, quay mặt vào mục tiêu, đón đầu hướng chạy. Không chọn: chỉ đánh thường + tung chiêu 1-4. Chỉ đánh/tung chiêu khi có người chơi trong 10 studs, không có ai thì tạm dừng. Nếu điện thoại không tự trúng nút đánh, bấm Hiệu chỉnh rồi chạm vào nút đánh thường 1 lần.", 100, THEME.sub, 11)
 
 local function setAttackVisual()
     setToggleVisual(AttackToggleBtn, "Tự đánh + chiêu", attackActive)
@@ -867,10 +868,26 @@ track(RunService.Heartbeat:Connect(function()
     zeroSelf(hrp)
 end))
 
--- Đánh thường liên tục (không cần chọn mục tiêu)
+-- Kiểm tra có người chơi (còn sống) trong phạm vi ATTACK_RANGE quanh mình không
+local function hasEnemyNearby()
+    local _, hrp = getChar()
+    if not hrp then return false end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local tHRP = p.Character:FindFirstChild("HumanoidRootPart")
+            local tHum = p.Character:FindFirstChildOfClass("Humanoid")
+            if tHRP and tHum and tHum.Health > 0 and (tHRP.Position - hrp.Position).Magnitude <= ATTACK_RANGE then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Đánh thường liên tục: chỉ đánh khi có người trong 10 studs, không có thì dừng chờ
 task.spawn(function()
     while running do
-        if attackActive then
+        if attackActive and hasEnemyNearby() then
             pcall(doM1)
             task.wait(ATTACK_DELAY)
         else
@@ -897,9 +914,9 @@ end
 task.spawn(function()
     local skills = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
     while running do
-        if attackActive then
+        if attackActive and hasEnemyNearby() then
             for i, key in ipairs(skills) do
-                if not attackActive or not running then break end
+                if not attackActive or not running or not hasEnemyNearby() then break end
                 pcall(function()
                     VirtualInputManager:SendKeyEvent(true, key, false, game)
                     task.wait(0.03)
