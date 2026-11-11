@@ -24,6 +24,8 @@ local FLING_STOP_SPEED = 250              -- nạn nhân có tốc độ > số 
 local FLING_MAX_TIME = 12                 -- an toàn: quá số giây này mà chưa văng thì qua người tiếp theo
 local ATTACK_DELAY = 0.25                 -- khoảng cách giữa 2 lần đánh thường
 local ATTACK_RANGE = 12                   -- chỉ đánh/tung chiêu khi có người chơi trong phạm vi này (studs)
+local BACK_DISTANCE = 6                   -- nút 'Đứng sau lưng người chơi': đứng cách sau lưng bao nhiêu studs
+local BACK_STEP_AHEAD = 3                 -- khi mục tiêu đang chạy: nhích lên trước thêm bấy nhiêu studs theo hướng chạy
 local USE_TOUCH_EVENTS = false            -- để false: tránh làm kẹt/liệt cảm ứng thật trên điện thoại
 
 local THEME = {
@@ -52,6 +54,7 @@ end
 
 local platform
 local flingMode, attackActive, selectedAttackTarget = nil, false, nil
+local backMode = false -- nút 'Đứng sau lưng người chơi'
 local minimized = false
 local selectedFlingPlayers = {}
 
@@ -798,15 +801,23 @@ createPlayerList(AttackPage, "Chọn 1 mục tiêu để ghim sau lưng (bấm l
 end)
 
 local AttackToggleBtn = makeButton(AttackPage, "", THEME.off, 36)
+local BackBtn = makeButton(AttackPage, "", THEME.off, 40)
 local CalibBtn = makeButton(AttackPage, "Hiệu chỉnh nút đánh thường (điện thoại)", THEME.purple, 36)
-makeLabel(AttackPage, "Có chọn mục tiêu: ghim sau lưng 5 studs, quay mặt vào mục tiêu, đón đầu hướng chạy. Không chọn: chỉ đánh thường + tung chiêu 1-4. Chỉ đánh/tung chiêu khi có người chơi trong 10 studs, không có ai thì tạm dừng. Nếu điện thoại không tự trúng nút đánh, bấm Hiệu chỉnh rồi chạm vào nút đánh thường 1 lần.", 100, THEME.sub, 11)
+makeLabel(AttackPage, "Có chọn mục tiêu: ghim sau lưng 5 studs, quay mặt vào mục tiêu, đón đầu hướng chạy. Không chọn: chỉ đánh thường + tung chiêu 1-4. Chỉ đánh/tung chiêu khi có người chơi trong 12 studs, không có ai thì tạm dừng.\n\nNút 'Đứng sau lưng người chơi': tự đứng sau lưng cách 6 studs (mục tiêu đang chọn, không chọn thì người gần nhất), đi theo và nhích lên trước theo hướng mục tiêu chạy, rồi tự đánh. Nếu điện thoại không tự trúng nút đánh, bấm Hiệu chỉnh rồi chạm vào nút đánh thường 1 lần.", 150, THEME.sub, 11)
 
 local function setAttackVisual()
     setToggleVisual(AttackToggleBtn, "Tự đánh + chiêu", attackActive)
+    setToggleVisual(BackBtn, "Đứng sau lưng người chơi", backMode)
 end
 setAttackVisual()
 AttackToggleBtn.MouseButton1Click:Connect(function()
     attackActive = not attackActive
+    if attackActive then backMode = false end -- 2 chế độ không chạy cùng lúc
+    setAttackVisual()
+end)
+BackBtn.MouseButton1Click:Connect(function()
+    backMode = not backMode
+    if backMode then attackActive = false end
     setAttackVisual()
 end)
 
@@ -868,6 +879,76 @@ track(RunService.Heartbeat:Connect(function()
     zeroSelf(hrp)
 end))
 
+-- Chế độ ĐỨNG SAU LƯNG NGƯỜI CHƠI: cách BACK_DISTANCE studs, nhích lên trước theo hướng chạy, quay mặt vào mục tiêu
+local backTracker = newTracker()
+local backTargetName = nil
+
+local function validTarget(name)
+    local p = name and Players:FindFirstChild(name)
+    local ch = p and p.Character
+    local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+    if hrp and hum and hum.Health > 0 then return p, hrp end
+    return nil
+end
+
+local function pickNearestTarget(myHRP)
+    local best, bestDist = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local _, tHRP = validTarget(p.Name)
+            if tHRP then
+                local d = (tHRP.Position - myHRP.Position).Magnitude
+                if d < bestDist then best, bestDist = p.Name, d end
+            end
+        end
+    end
+    return best
+end
+
+track(RunService.Heartbeat:Connect(function()
+    if not backMode or flingMode then return end
+    local _, hrp = getChar()
+    if not hrp then return end
+
+    -- Mục tiêu: người đang chọn (nếu có), không thì người gần nhất
+    local name = selectedAttackTarget
+    if not validTarget(name) then
+        if not validTarget(backTargetName) then
+            backTargetName = pickNearestTarget(hrp)
+        end
+        name = backTargetName
+    end
+    local p, targetHRP = validTarget(name)
+    if not p then return end
+
+    if backTargetName ~= name then backTargetName = name end
+    if backTracker.name ~= name then
+        backTracker.name = name
+        backTracker.reset()
+    end
+
+    local vel = backTracker.update(targetHRP)
+    if vel.Magnitude > 200 then vel = Vector3.zero end
+    local flatVel = Vector3.new(vel.X, 0, vel.Z)
+
+    -- Vị trí dự đoán + 1 bước phía trước theo hướng mục tiêu đang chạy
+    local predicted = targetHRP.Position + vel * getLead()
+    if flatVel.Magnitude > 2 then
+        predicted = predicted + flatVel.Unit * BACK_STEP_AHEAD
+    end
+
+    -- "Sau lưng" tính theo hướng mặt của mục tiêu
+    local look = targetHRP.CFrame.LookVector
+    look = Vector3.new(look.X, 0, look.Z)
+    if look.Magnitude < 0.01 then return end
+    look = look.Unit
+
+    local myPos = predicted - look * BACK_DISTANCE
+    hrp.CFrame = faceCF(myPos, predicted, look)
+    zeroSelf(hrp)
+end))
+
 -- Kiểm tra có người chơi (còn sống) trong phạm vi ATTACK_RANGE quanh mình không
 local function hasEnemyNearby()
     local _, hrp = getChar()
@@ -884,10 +965,10 @@ local function hasEnemyNearby()
     return false
 end
 
--- Đánh thường liên tục: chỉ đánh khi có người trong 10 studs, không có thì dừng chờ
+-- Đánh thường liên tục: chỉ đánh khi có người trong 12 studs, không có thì dừng chờ
 task.spawn(function()
     while running do
-        if attackActive and hasEnemyNearby() then
+        if (attackActive or backMode) and hasEnemyNearby() then
             pcall(doM1)
             task.wait(ATTACK_DELAY)
         else
@@ -914,9 +995,9 @@ end
 task.spawn(function()
     local skills = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
     while running do
-        if attackActive and hasEnemyNearby() then
+        if (attackActive or backMode) and hasEnemyNearby() then
             for i, key in ipairs(skills) do
-                if not attackActive or not running or not hasEnemyNearby() then break end
+                if not (attackActive or backMode) or not running or not hasEnemyNearby() then break end
                 pcall(function()
                     VirtualInputManager:SendKeyEvent(true, key, false, game)
                     task.wait(0.03)
@@ -986,11 +1067,11 @@ local EFFECT_CLASSES = {
     "SurfaceAppearance", "ForceField", "Texture",
 }
 
+local EFFECT_SET = {}
+for _, cn in ipairs(EFFECT_CLASSES) do EFFECT_SET[cn] = true end
+
 local function isEffect(obj)
-    for _, cn in ipairs(EFFECT_CLASSES) do
-        if obj:IsA(cn) then return true end
-    end
-    return false
+    return EFFECT_SET[obj.ClassName] == true
 end
 
 local function isCharacterModel(m)
@@ -1019,12 +1100,17 @@ local function containsPlayerCharacter(obj)
 end
 
 local function cleanCharacterObject(obj)
-    if isEffect(obj) then
+    local cn = obj.ClassName
+    if EFFECT_SET[cn] or cn == "Accessory" or cn == "CharacterMesh" or cn == "Decal" then
+        -- hiệu ứng, phụ kiện (mũ/tóc...), mặt: xóa hết cho nhẹ máy
         pcall(function() obj:Destroy() end)
     elseif obj:IsA("BasePart") then
         obj.Material = Enum.Material.SmoothPlastic
         obj.CastShadow = false
         obj.Reflectance = 0
+        if cn == "MeshPart" then
+            pcall(function() obj.RenderFidelity = Enum.RenderFidelity.Performance end)
+        end
     end
 end
 
@@ -1068,7 +1154,7 @@ local function cleanLighting()
     pcall(function() Lighting.ExposureCompensation = 0 end)
     pcall(function() Lighting.EnvironmentDiffuseScale = 0 end)
     pcall(function() Lighting.EnvironmentSpecularScale = 0 end)
-    pcall(function() sethiddenproperty(Lighting, "Technology", Enum.Technology.Legacy) end)
+    pcall(function() sethiddenproperty(Lighting, "Technology", Enum.Technology.Compatibility) end)
 end
 
 local function destroySounds(root)
@@ -1132,6 +1218,9 @@ local function purgeEverything()
     end)
 
     pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+    pcall(function() settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04 end)
+    pcall(function() UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1 end)
+    pcall(function() game:GetService("MaterialService").Use2022Materials = false end)
 
     pcall(function() SoundService.AmbientReverb = Enum.ReverbType.NoReverb end)
     destroySounds(workspace)
@@ -1144,18 +1233,52 @@ local function purgeEverything()
         pcall(function() StarterGui:SetCoreGuiEnabled(t, false) end)
     end
 
+    -- Vật thể mới sinh ra được xếp hàng và xử lý có giới hạn thời gian mỗi khung hình (nhẹ cho máy yếu)
+    local function makeQueue() return {objs = {}, times = {}, head = 1, tail = 0} end
+    local fastQ, slowQ = makeQueue(), makeQueue()
+
+    local function push(q, obj, delay)
+        q.tail = q.tail + 1
+        q.objs[q.tail] = obj
+        q.times[q.tail] = os.clock() + delay
+    end
+
+    local function handleNew(obj, isContainer)
+        if not running or not obj:IsDescendantOf(workspace) then return end
+        if obj == platform or obj:IsA("Camera") or obj:IsA("Terrain") or obj:IsA("SpawnLocation") then return end
+        if inPlayerCharacter(obj) then
+            cleanCharacterObject(obj)
+            return
+        end
+        if isContainer and (isCharacterModel(obj) or containsPlayerCharacter(obj)) then return end
+        pcall(function() obj:Destroy() end)
+    end
+
+    local function drain(q, isContainer, t0)
+        while q.head <= q.tail do
+            local now = os.clock()
+            if now - t0 > 0.002 or q.times[q.head] > now then return end
+            local obj = q.objs[q.head]
+            q.objs[q.head] = nil
+            q.times[q.head] = nil
+            q.head = q.head + 1
+            handleNew(obj, isContainer)
+        end
+        q.head, q.tail = 1, 0
+    end
+
     track(workspace.DescendantAdded:Connect(function(obj)
-        local isContainer = obj:IsA("Model") or obj:IsA("Folder")
-        task.delay(isContainer and 0.4 or 0.08, function()
-            if not running or not obj:IsDescendantOf(workspace) then return end
-            if obj == platform or obj:IsA("Camera") or obj:IsA("Terrain") or obj:IsA("SpawnLocation") then return end
-            if inPlayerCharacter(obj) then
-                cleanCharacterObject(obj)
-                return
-            end
-            if isContainer and (isCharacterModel(obj) or containsPlayerCharacter(obj)) then return end
-            pcall(function() obj:Destroy() end)
-        end)
+        if obj:IsA("Model") or obj:IsA("Folder") then
+            push(slowQ, obj, 0.4)
+        else
+            push(fastQ, obj, 0.03)
+        end
+    end))
+
+    track(RunService.Heartbeat:Connect(function()
+        local t0 = os.clock()
+        drain(fastQ, false, t0)
+        drain(slowQ, true, t0)
     end))
 end
 
@@ -1235,7 +1358,7 @@ RunService:BindToRenderStep("TSB_NoShiftLock", Enum.RenderPriority.Camera.Value 
     if hum then
         if hum.CameraOffset ~= Vector3.zero then hum.CameraOffset = Vector3.zero end
         -- đang fling/ghim thì giữ hướng mặt do script đặt, còn lại để nhân vật tự xoay bình thường
-        local controlling = (flingMode ~= nil) or (attackActive and selectedAttackTarget ~= nil)
+        local controlling = (flingMode ~= nil) or backMode or (attackActive and selectedAttackTarget ~= nil)
         if hum.AutoRotate == controlling then hum.AutoRotate = not controlling end
     end
 end)
@@ -1281,6 +1404,7 @@ end
 ScreenGui.Destroying:Connect(function()
     running = false
     attackActive = false
+    backMode = false
     flingMode = nil
     pcall(function() RunService:UnbindFromRenderStep("TSB_NoShiftLock") end)
     for _, c in ipairs(connections) do
